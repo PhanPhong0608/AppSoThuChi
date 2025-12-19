@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../be/xu_ly_thu_chi_service.dart';
 import '../be/tong_quan_thang.dart';
+import '../db/models/giao_dich.dart';
+import '../db/models/danh_muc.dart';
+import '../db/models/vi_tien.dart';
 import 'widgets/the_tong_quan_thang.dart';
 
 class TrangTongQuanPage extends StatefulWidget {
@@ -39,7 +42,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     final now = DateTime.now();
     ngayLoc = DateTime(now.year, now.month, now.day);
 
-    taiLai();
+    _taiDuLieu();
   }
 
   @override
@@ -49,14 +52,28 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
   }
 
 
-  Future<void> taiLai() async {
+  Future<void> _taiDuLieu() async {
     setState(() => loading = true);
+    // Fetch danh sách ví để map ID sang Tên (nếu cần hiển thị tên ví)
+    // Nhưng GiaoDich model hiện tại chưa có tên Ví.
+    // Cách nhanh: load dsVi vào 1 Map<int, String>
+    dsViMap.clear();
+    final listVi = await widget.service.layDanhSachVi();
+    for (var v in listVi) {
+      dsViMap[v.id] = v.ten;
+    }
+
     tongQuan = await widget.service.taiDuLieuThang(
       taiKhoanId: widget.taiKhoanId,
       thangDangXem: thangDangXem,
     );
     if (mounted) setState(() => loading = false);
   }
+
+  Future<void> taiLai() => _taiDuLieu();
+
+  // Map cache tên ví
+  final Map<int, String> dsViMap = {};
 
   bool _cungNgay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -146,6 +163,57 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
   void _boLocNgay() {
     final now = DateTime.now();
     setState(() => ngayLoc = DateTime(now.year, now.month, now.day));
+  }
+
+  Future<void> _xoaGiaoDich(GiaoDich g) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Xóa giao dịch"),
+        content: const Text("Bạn có chắc chắn muốn xóa không?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Hủy")),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Xóa")),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await widget.service.xoaGiaoDich(g.id);
+      taiLai();
+    }
+  }
+
+  Future<void> _suaGiaoDich(GiaoDich g) async {
+    final dsVi = await widget.service.layDanhSachVi();
+    final danhMuc = await widget.service.repo.layDanhMuc();
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => DialogSuaGiaoDich(
+        giaoDich: g,
+        dsVi: dsVi,
+        dsDanhMuc: danhMuc,
+        onSave: (amt, dm, vi, ngay, note) async {
+          await widget.service.suaGiaoDich(
+            id: g.id,
+            soTien: amt,
+            danhMucId: dm,
+            viTienId: vi,
+            ngay: ngay,
+            ghiChu: note,
+          );
+          if (mounted) Navigator.pop(context);
+          taiLai();
+        },
+      ),
+    );
   }
 
   @override
@@ -243,14 +311,43 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                         final g = dsHienThi[i];
                                         return Card(
                                           child: ListTile(
-                                            leading: const Icon(Icons.receipt_long),
+                                            leading:
+                                                const Icon(Icons.receipt_long),
                                             title: Text(
                                               "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: g.viTienId == null
+                                                      ? Colors.black
+                                                      : Colors.green[800]),
                                             ),
-                                            subtitle: Text(
-                                              "${DateFormat("dd/MM/yyyy").format(g.ngay)}"
-                                              "${(g.ghiChu == null) ? "" : " • ${g.ghiChu}"}",
+                                            subtitle: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  DateFormat("dd/MM/yyyy")
+                                                      .format(g.ngay),
+                                                ),
+                                                if (g.ghiChu != null &&
+                                                    g.ghiChu!.isNotEmpty)
+                                                  Text(g.ghiChu!),
+                                                Text(
+                                                  g.viTienId == null
+                                                      ? "Nguồn: Ngân sách"
+                                                      : "Nguồn: ${dsViMap[g.viTienId] ?? 'Ví'}",
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontStyle: FontStyle.italic,
+                                                    color: g.viTienId == null
+                                                        ? Colors.grey[600]
+                                                        : Colors.green[700],
+                                                  ),
+                                                ),
+                                              ],
                                             ),
+                                            onTap: () => _suaGiaoDich(g),
+                                            onLongPress: () => _xoaGiaoDich(g),
                                           ),
                                         );
                                       },
@@ -267,6 +364,142 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class DialogSuaGiaoDich extends StatefulWidget {
+  const DialogSuaGiaoDich({
+    super.key,
+    required this.giaoDich,
+    required this.dsVi,
+    required this.dsDanhMuc,
+    required this.onSave,
+  });
+
+  final GiaoDich giaoDich;
+  final List<ViTien> dsVi;
+  final List<DanhMuc> dsDanhMuc;
+  final Function(int, int, int?, DateTime, String?) onSave;
+
+  @override
+  State<DialogSuaGiaoDich> createState() => _DialogSuaGiaoDichState();
+}
+
+class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
+  late TextEditingController _soTienCtrl;
+  late TextEditingController _ghiChuCtrl;
+  late DateTime _ngay;
+  int? _selectedVi;
+  late int _selectedDanhMuc;
+  bool _dungVi = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final g = widget.giaoDich;
+    _soTienCtrl = TextEditingController(text: g.soTien.toString());
+    _ghiChuCtrl = TextEditingController(text: g.ghiChu ?? "");
+    _ngay = g.ngay;
+    _selectedVi = g.viTienId;
+    _selectedDanhMuc = g.danhMucId;
+    _dungVi = g.viTienId != null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Sửa giao dịch"),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _soTienCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: "Số tiền"),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: _selectedDanhMuc,
+              items: widget.dsDanhMuc
+                  .map<DropdownMenuItem<int>>((e) =>
+                      DropdownMenuItem(value: e.id as int, child: Text(e.ten)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedDanhMuc = v!),
+              decoration: const InputDecoration(labelText: "Danh mục"),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text("Nguồn: "),
+                ChoiceChip(
+                  label: const Text("Ngân sách"),
+                  selected: !_dungVi,
+                  onSelected: (v) => v ? setState(() => _dungVi = false) : null,
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text("Ví"),
+                  selected: _dungVi,
+                  onSelected: (v) => v
+                      ? setState(() {
+                          _dungVi = true;
+                          if (_selectedVi == null && widget.dsVi.isNotEmpty) {
+                             _selectedVi = widget.dsVi.first.id;
+                          }
+                        })
+                      : null,
+                ),
+              ],
+            ),
+            if (_dungVi)
+              DropdownButtonFormField<int>(
+                value: _selectedVi,
+                items: widget.dsVi
+                    .map<DropdownMenuItem<int>>((e) =>
+                        DropdownMenuItem(value: e.id as int, child: Text(e.ten)))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedVi = v),
+                decoration: const InputDecoration(labelText: "Ví"),
+              ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _ghiChuCtrl,
+              decoration: const InputDecoration(labelText: "Ghi chú"),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final d = await showDatePicker(
+                    context: context,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    initialDate: _ngay);
+                if (d != null) setState(() => _ngay = d);
+              },
+              icon: const Icon(Icons.calendar_today),
+              label: Text(DateFormat("dd/MM/yyyy").format(_ngay)),
+            )
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
+        FilledButton(
+            onPressed: () {
+              final amt = int.tryParse(_soTienCtrl.text) ?? 0;
+              widget.onSave(
+                amt,
+                _selectedDanhMuc,
+                _dungVi ? _selectedVi : null,
+                _ngay,
+                _ghiChuCtrl.text,
+              );
+            },
+            child: const Text("Lưu")),
+      ],
     );
   }
 }

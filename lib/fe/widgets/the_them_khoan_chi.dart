@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../db/models/danh_muc.dart';
+import '../../db/models/vi_tien.dart';
 
 class TheThemKhoanChi extends StatelessWidget {
   const TheThemKhoanChi({
@@ -9,6 +10,11 @@ class TheThemKhoanChi extends StatelessWidget {
     required this.danhMuc,
     required this.selectedDanhMucId,
     required this.onDanhMucChanged,
+    required this.dsVi,
+    required this.dungVi,
+    required this.onDungViChanged,
+    required this.selectedViId,
+    required this.onViChanged,
     required this.soTienCtrl,
     required this.ghiChuCtrl,
     required this.ngayChon,
@@ -19,6 +25,12 @@ class TheThemKhoanChi extends StatelessWidget {
   final List<DanhMuc> danhMuc;
   final int? selectedDanhMucId;
   final ValueChanged<int?> onDanhMucChanged;
+
+  final List<ViTien> dsVi;
+  final bool dungVi;
+  final ValueChanged<bool> onDungViChanged;
+  final int? selectedViId;
+  final ValueChanged<int?> onViChanged;
   final TextEditingController soTienCtrl;
   final TextEditingController ghiChuCtrl;
   final DateTime ngayChon;
@@ -50,11 +62,48 @@ class TheThemKhoanChi extends StatelessWidget {
               items: danhMuc.map((d) => DropdownMenuItem<int>(value: d.id, child: Text(d.ten))).toList(),
               onChanged: onDanhMucChanged,
               decoration: const InputDecoration(
-                labelText: "Danh mục",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.category),
               ),
             ),
+            const SizedBox(height: 10),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text("Nguồn tiền: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text("Ngân sách"),
+                  selected: !dungVi,
+                  onSelected: (v) => v ? onDungViChanged(false) : null,
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text("Ví tiền"),
+                  selected: dungVi,
+                  onSelected: (v) => v ? onDungViChanged(true) : null,
+                ),
+              ],
+            ),
+            if (dungVi) ...[
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int>(
+                value: selectedViId,
+                items: dsVi
+                    .map((v) => DropdownMenuItem<int>(
+                          value: v.id,
+                          child: Text(
+                              "${v.ten} (${NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0).format(v.soDu)})"),
+                        ))
+                    .toList(),
+                onChanged: onViChanged,
+                decoration: const InputDecoration(
+                  labelText: "Chọn ví",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.account_balance_wallet),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(
               controller: ghiChuCtrl,

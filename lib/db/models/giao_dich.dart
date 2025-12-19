@@ -5,6 +5,9 @@ class GiaoDich {
   final DateTime ngay;
   final String? ghiChu;
 
+  // ✅ thêm ví tiền (có thể null nếu không chọn ví)
+  final int? viTienId;
+
   // view-only
   final String tenDanhMuc;
 
@@ -15,6 +18,7 @@ class GiaoDich {
     required this.ngay,
     required this.ghiChu,
     required this.tenDanhMuc,
+    this.viTienId,
   });
 
   factory GiaoDich.fromMap(Map<String, Object?> m) => GiaoDich(
@@ -23,15 +27,22 @@ class GiaoDich {
         danhMucId: m["danh_muc_id"] as int,
         ngay: DateTime.fromMillisecondsSinceEpoch(m["ngay"] as int),
         ghiChu: m["ghi_chu"] as String?,
-        tenDanhMuc: "",
+        viTienId: m["vi_tien_id"] as int?, // ✅ map từ DB
+        tenDanhMuc: (m["ten_danh_muc"] as String?) ?? "", // nếu query join có alias
       );
 
-  GiaoDich copyWith({String? tenDanhMuc}) => GiaoDich(
+  GiaoDich copyWith({
+    String? tenDanhMuc,
+    int? viTienId,
+    bool clearViTienId = false,
+  }) =>
+      GiaoDich(
         id: id,
         soTien: soTien,
         danhMucId: danhMucId,
         ngay: ngay,
         ghiChu: ghiChu,
         tenDanhMuc: tenDanhMuc ?? this.tenDanhMuc,
+        viTienId: clearViTienId ? null : (viTienId ?? this.viTienId),
       );
 }

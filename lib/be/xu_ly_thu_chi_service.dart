@@ -1,4 +1,5 @@
 import '../db/models/giao_dich.dart';
+import '../db/models/vi_tien.dart';
 import 'kho_thu_chi_repository.dart';
 import 'tong_quan_thang.dart';
 
@@ -31,11 +32,12 @@ class XuLyThuChiService {
           thang: thangDangXem.month,
         ) ??
         0;
-
+    // Tính tổng chi (chỉ tính từ ngân sách, KHÔNG tính từ ví)
     final daChi = await repo.tinhTongChiTrongKhoang(
       taiKhoanId: taiKhoanId,
       startMs: startMs,
       endMs: endMs,
+      chiTuNganSach: true, 
     );
 
     final raw = await repo.layGiaoDichTrongKhoang(
@@ -73,6 +75,7 @@ class XuLyThuChiService {
     required int taiKhoanId,
     required int soTien,
     required int danhMucId,
+    required int? viTienId,
     required DateTime ngay,
     String? ghiChu,
   }) async {
@@ -80,8 +83,67 @@ class XuLyThuChiService {
       taiKhoanId: taiKhoanId,
       soTien: soTien,
       danhMucId: danhMucId,
+      viTienId: viTienId,
       ngay: ngay,
       ghiChu: ghiChu,
     );
+  }
+
+  Future<List<ViTien>> layDanhSachVi() => repo.layDanhSachVi();
+
+  Future<void> themVi({
+    required String ten,
+    required String loai,
+    required int soDu,
+    String? icon,
+  }) =>
+      repo.themVi(ten: ten, loai: loai, soDu: soDu, icon: icon);
+
+  Future<void> capNhatSoDuVi(int viId, int soDuMoi) =>
+      repo.capNhatSoDuVi(viId, soDuMoi);
+
+  Future<void> xoaVi(int id) => repo.xoaVi(id);
+
+  Future<void> suaVi(int id, String ten, String loai, String? icon) =>
+      repo.suaVi(id, ten, loai, icon);
+
+  Future<void> suaGiaoDich({
+    required int id,
+    required int soTien,
+    required int danhMucId,
+    required int? viTienId,
+    required DateTime ngay,
+    String? ghiChu,
+  }) =>
+      repo.suaGiaoDich(
+        id: id,
+        soTienMoi: soTien,
+        danhMucIdMoi: danhMucId,
+        viTienIdMoi: viTienId,
+        ngayMoi: ngay,
+        ghiChuMoi: ghiChu,
+      );
+
+  Future<void> xoaGiaoDich(int id) => repo.xoaGiaoDich(id);
+
+  Future<int> layTongChiTieuTheoVi(int viId) => repo.layTongChiTieuTheoVi(viId);
+
+  Future<List<Map<String, Object?>>> layThongKeTheoDanhMuc({
+    required int taiKhoanId,
+    required DateTime thang,
+  }) {
+    final (start, next) = _khoangThang(thang);
+    return repo.thongKeTheoDanhMuc(
+      taiKhoanId: taiKhoanId,
+      startMs: start.millisecondsSinceEpoch,
+      endMs: next.millisecondsSinceEpoch,
+    );
+  }
+
+  Future<List<Map<String, Object?>>> layThongKeTheoNam({
+    required int taiKhoanId,
+    required int nam,
+  }) {
+    return repo.thongKeTheoThoiGian(taiKhoanId: taiKhoanId, nam: nam);
   }
 }

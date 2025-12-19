@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../be/xu_ly_thu_chi_service.dart';
 import '../db/models/danh_muc.dart';
+import '../db/models/vi_tien.dart';
 import 'widgets/the_them_khoan_chi.dart';
 
 class ThemKhoanChiPage extends StatefulWidget {
@@ -22,6 +23,10 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   List<DanhMuc> danhMuc = [];
   int? selectedDanhMucId;
 
+  List<ViTien> dsVi = [];
+  int? selectedViId;
+  bool dungVi = true;
+
   DateTime ngayChon = DateTime.now();
   final soTienCtrl = TextEditingController();
   final ghiChuCtrl = TextEditingController();
@@ -36,7 +41,9 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
 
   Future<void> _loadDanhMuc() async {
     danhMuc = await widget.service.repo.layDanhMuc();
+    dsVi = await widget.service.layDanhSachVi();
     selectedDanhMucId = danhMuc.isNotEmpty ? danhMuc.first.id : null;
+    selectedViId = dsVi.isNotEmpty ? dsVi.first.id : null;
     setState(() => loading = false);
   }
 
@@ -72,6 +79,7 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
       taiKhoanId: widget.taiKhoanId,
       soTien: soTien,
       danhMucId: dmId,
+      viTienId: dungVi ? selectedViId : null,
       ngay: ngayChon,
       ghiChu: ghiChuCtrl.text.trim().isEmpty ? null : ghiChuCtrl.text.trim(),
     );
@@ -92,6 +100,11 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
                   danhMuc: danhMuc,
                   selectedDanhMucId: selectedDanhMucId,
                   onDanhMucChanged: (v) => setState(() => selectedDanhMucId = v),
+                  dsVi: dsVi,
+                  dungVi: dungVi,
+                  onDungViChanged: (v) => setState(() => dungVi = v),
+                  selectedViId: selectedViId,
+                  onViChanged: (v) => setState(() => selectedViId = v),
                   soTienCtrl: soTienCtrl,
                   ghiChuCtrl: ghiChuCtrl,
                   ngayChon: ngayChon,
