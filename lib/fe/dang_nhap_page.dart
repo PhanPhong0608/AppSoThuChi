@@ -14,7 +14,7 @@ class DangNhapPage extends StatefulWidget {
 
   final PhienDangNhap phien;
   final XuLyTaiKhoanService tkService;
-  final ValueChanged<int> onLoggedIn;
+  final ValueChanged<String> onLoggedIn;
 
   @override
   State<DangNhapPage> createState() => _DangNhapPageState();
@@ -32,19 +32,33 @@ class _DangNhapPageState extends State<DangNhapPage> {
     super.dispose();
   }
 
-  void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _toast(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _dangNhap() async {
+    final emailRegex = RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$');
+    if (emailCtrl.text.trim().isEmpty ||
+        !emailRegex.hasMatch(emailCtrl.text.trim())) {
+      _toast("Email không hợp lệ.");
+      return;
+    }
+
+    if (passCtrl.text.isEmpty) {
+      _toast("Vui lòng nhập mật khẩu.");
+      return;
+    }
+
     setState(() => loading = true);
     try {
-      final id = await widget.tkService.dangNhap(
+      final tk = await widget.tkService.dangNhap(
         email: emailCtrl.text,
         matKhau: passCtrl.text,
+        phien: widget.phien,
       );
-      await widget.phien.luuUserId(id);
-      widget.onLoggedIn(id);
+
+      widget.onLoggedIn(tk.id);
     } catch (e) {
-      _toast(e.toString().replaceFirst("Exception: ", ""));
+      if (mounted) _toast(e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -60,25 +74,42 @@ class _DangNhapPageState extends State<DangNhapPage> {
           TextField(
             controller: emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: "Email", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: "Email",
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: passCtrl,
             obscureText: true,
-            decoration: const InputDecoration(labelText: "Mật khẩu", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: "Mật khẩu",
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: loading ? null : _dangNhap,
-            child: loading ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator()) : const Text("Đăng nhập"),
+            child: loading
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(),
+                  )
+                : const Text("Đăng nhập"),
           ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => DangKyPage(tkService: widget.tkService)),
+                MaterialPageRoute(
+                  builder: (_) => DangKyPage(
+                    tkService: widget.tkService,
+                    phien: widget.phien, // ✅ thêm phien
+                  ),
+                ),
               );
             },
             child: const Text("Chưa có tài khoản? Đăng ký"),

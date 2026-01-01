@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../be/phien_dang_nhap.dart';
 import '../be/kho_tai_khoan_repository.dart';
 
@@ -12,7 +11,7 @@ class TaiKhoanPage extends StatefulWidget {
     required this.onLogout,
   });
 
-  final int taiKhoanId;
+  final String taiKhoanId;
   final PhienDangNhap phien;
   final KhoTaiKhoanRepository khoTaiKhoanRepo;
   final VoidCallback onLogout;
@@ -32,7 +31,7 @@ class _TaiKhoanPageState extends State<TaiKhoanPage> {
   }
 
   Future<void> _load() async {
-    final tk = await widget.khoTaiKhoanRepo.timTheoId(widget.taiKhoanId);
+    final tk = await widget.khoTaiKhoanRepo.layTheoId(widget.taiKhoanId);
     setState(() {
       email = tk?.email;
       loading = false;

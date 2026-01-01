@@ -12,7 +12,7 @@ class ThemKhoanChiPage extends StatefulWidget {
     required this.service,
   });
 
-  final int taiKhoanId;
+  final String taiKhoanId;
   final XuLyThuChiService service;
 
   @override
@@ -21,10 +21,10 @@ class ThemKhoanChiPage extends StatefulWidget {
 
 class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   List<DanhMuc> danhMuc = [];
-  int? selectedDanhMucId;
+  String? selectedDanhMucId;
 
   List<ViTien> dsVi = [];
-  int? selectedViId;
+  String? selectedViId;
   bool dungVi = true;
 
   DateTime ngayChon = DateTime.now();
@@ -40,11 +40,28 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   }
 
   Future<void> _loadDanhMuc() async {
-    danhMuc = await widget.service.repo.layDanhMuc();
-    dsVi = await widget.service.layDanhSachVi();
-    selectedDanhMucId = danhMuc.isNotEmpty ? danhMuc.first.id : null;
-    selectedViId = dsVi.isNotEmpty ? dsVi.first.id : null;
-    setState(() => loading = false);
+    try {
+        // Use service API that uses the current logged-in user
+        final cats = await widget.service.layDanhMuc();
+        danhMuc = cats;
+      debugPrint('ThemKhoanChiPage: loaded ${danhMuc.length} categories');
+
+      // If no categories exist, create defaults and reload
+      if (danhMuc.isEmpty) {
+        await widget.service.seedDefaultCategories();
+        final raw = await widget.service.layDanhMuc();
+        danhMuc = raw;
+      }
+
+      dsVi = await widget.service.layDanhSachVi();
+      debugPrint('ThemKhoanChiPage: loaded ${dsVi.length} wallets');
+      selectedDanhMucId = danhMuc.isNotEmpty ? danhMuc.first.id : null;
+      selectedViId = dsVi.isNotEmpty ? dsVi.first.id : null;
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi tải danh mục: $e')));
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
   @override
@@ -84,7 +101,7 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
       ghiChu: ghiChuCtrl.text.trim().isEmpty ? null : ghiChuCtrl.text.trim(),
     );
 
-    Navigator.pop(context, true); // báo về Shell là đã thêm
+    Navigator.pop(context, true);
   }
 
   @override

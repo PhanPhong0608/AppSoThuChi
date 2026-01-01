@@ -28,7 +28,8 @@ class TrangViTienPageState extends State<TrangViTienPage> {
 
   Future<void> _taiDuLieu() async {
     setState(() => _dangTai = true);
-    final list = await widget.service.layDanhSachVi();
+    try {
+      final list = await widget.service.layDanhSachVi();
     // Populate chiTieu
     final updatedList = <ViTien>[];
     for (var v in list) {
@@ -44,11 +45,21 @@ class TrangViTienPageState extends State<TrangViTienPage> {
       ));
     }
 
-    if (mounted) {
-      setState(() {
-        _danhSachVi = updatedList;
-        _dangTai = false;
-      });
+      if (mounted) {
+        setState(() {
+          _danhSachVi = updatedList;
+          _dangTai = false;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('TrangViTienPage: error loading data: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _danhSachVi = [];
+          _dangTai = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi tải ví: $e')));
+      }
     }
   }
 

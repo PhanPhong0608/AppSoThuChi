@@ -1,60 +1,32 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:firebase_database/firebase_database.dart';
 
-import '../db/so_thu_chi_db.dart';
 import '../db/models/tai_khoan.dart';
 
+/// Repository chỉ làm việc với **hồ sơ** user trong Realtime Database.
+///
+/// Authentication (đăng ký/đăng nhập) sẽ do FirebaseAuth xử lý.
 class KhoTaiKhoanRepository {
-  final SoThuChiDb _db;
-  KhoTaiKhoanRepository(this._db);
+  final DatabaseReference _ref = FirebaseDatabase.instance.ref();
 
-  Database get db => _db.db;
+  DatabaseReference _userRef(String uid) => _ref.child('users').child(uid);
 
-  Future<TaiKhoan?> timTheoEmail(String email) async {
-    final rows = await db.query(
-      "tai_khoan",
-      columns: ["id", "email"],
-      where: "email = ?",
-      whereArgs: [email],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return TaiKhoan.fromMap(rows.first);
-  }
-
-  Future<TaiKhoan?> timTheoId(int id) async {
-    final rows = await db.query(
-      "tai_khoan",
-      columns: ["id", "email"],
-      where: "id = ?",
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return TaiKhoan.fromMap(rows.first);
-  }
-
-  Future<Map<String, Object?>?> layRowTheoEmail(String email) async {
-    final rows = await db.query(
-      "tai_khoan",
-      where: "email = ?",
-      whereArgs: [email],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return rows.first;
-  }
-
-  Future<int> taoTaiKhoan({
-    required String email,
-    required String matKhauHash,
-    required String salt,
-  }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return db.insert("tai_khoan", {
-      "email": email,
-      "mat_khau_hash": matKhauHash,
-      "salt": salt,
-      "tao_luc": now,
+  /// Tạo/cập nhật hồ sơ cơ bản cho user.
+  ///
+  /// Không lưu password/salt/hash trong DB nữa.
+  Future<void> upsertHoSo({required String uid, required String email}) async {
+    await _userRef(uid).update({
+      'email': email,
+      'tao_luc': DateTime.now().millisecondsSinceEpoch,
     });
+  }
+
+  Future<TaiKhoan?> layTheoId(String uid) async {
+    final snap = await _userRef(uid).get();
+    if (!snap.exists || snap.value == null) return null;
+
+    final data = Map<String, Object?>.from(snap.value as Map);
+    // đảm bảo có id
+    data['id'] = uid;
+    return TaiKhoan.fromMap(data);
   }
 }

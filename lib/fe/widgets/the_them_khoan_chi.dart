@@ -23,14 +23,14 @@ class TheThemKhoanChi extends StatelessWidget {
   });
 
   final List<DanhMuc> danhMuc;
-  final int? selectedDanhMucId;
-  final ValueChanged<int?> onDanhMucChanged;
+  final String? selectedDanhMucId;
+  final ValueChanged<String?> onDanhMucChanged;
 
   final List<ViTien> dsVi;
   final bool dungVi;
   final ValueChanged<bool> onDungViChanged;
-  final int? selectedViId;
-  final ValueChanged<int?> onViChanged;
+  final String? selectedViId;
+  final ValueChanged<String?> onViChanged;
   final TextEditingController soTienCtrl;
   final TextEditingController ghiChuCtrl;
   final DateTime ngayChon;
@@ -57,9 +57,11 @@ class TheThemKhoanChi extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<int>(
+            DropdownButtonFormField<String>(
               value: selectedDanhMucId,
-              items: danhMuc.map((d) => DropdownMenuItem<int>(value: d.id, child: Text(d.ten))).toList(),
+              isExpanded: true,
+              hint: const Text("Chọn danh mục"),
+              items: danhMuc.map((d) => DropdownMenuItem<String>(value: d.id, child: Text(d.ten))).toList(),
               onChanged: onDanhMucChanged,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
@@ -87,10 +89,12 @@ class TheThemKhoanChi extends StatelessWidget {
             ),
             if (dungVi) ...[
               const SizedBox(height: 10),
-              DropdownButtonFormField<int>(
+              DropdownButtonFormField<String>(
                 value: selectedViId,
+                isExpanded: true,
+                hint: const Text("Chọn ví"),
                 items: dsVi
-                    .map((v) => DropdownMenuItem<int>(
+                    .map((v) => DropdownMenuItem<String>(
                           value: v.id,
                           child: Text(
                               "${v.ten} (${NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0).format(v.soDu)})"),

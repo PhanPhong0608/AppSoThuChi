@@ -1,5 +1,5 @@
 class ViTien {
-  final int id;
+  final String id;
   final String ten;
   final String? loai;
   final int soDu;
@@ -20,7 +20,7 @@ class ViTien {
 
   factory ViTien.fromMap(Map<String, dynamic> map) {
     return ViTien(
-      id: map['id'] as int,
+      id: map['id'] as String,
       ten: map['ten'] as String,
       loai: map['loai'] as String?,
       soDu: map['so_du'] as int,

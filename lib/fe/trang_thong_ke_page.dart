@@ -11,7 +11,7 @@ class TrangThongKePage extends StatefulWidget {
     required this.service,
   });
 
-  final int taiKhoanId;
+  final String taiKhoanId;
   final XuLyThuChiService service;
 
   @override

@@ -1,11 +1,21 @@
 import '../db/models/giao_dich.dart';
 import '../db/models/vi_tien.dart';
+import '../db/models/danh_muc.dart';
 import 'kho_thu_chi_repository.dart';
 import 'tong_quan_thang.dart';
+import 'phien_dang_nhap.dart';
 
 class XuLyThuChiService {
   final KhoThuChiRepository repo;
-  XuLyThuChiService(this.repo);
+  final PhienDangNhap phien;
+
+  XuLyThuChiService(this.repo, this.phien);
+
+  Future<String> _getUserId() async {
+    final uid = await phien.layUserId();
+    if (uid == null) throw Exception("Chưa đăng nhập.");
+    return uid;
+  }
 
   (DateTime, DateTime) _khoangThang(DateTime thangDangXem) {
     final start = DateTime(thangDangXem.year, thangDangXem.month, 1);
@@ -15,33 +25,48 @@ class XuLyThuChiService {
     return (start, next);
   }
 
+  // NOTE: taiKhoanId was passed here before.
+  // Should we use the passed one or the one from Phien?
+  // Usually the UI passes the current user ID if it knows it.
+  // But let's verify if the UI passes it. 
+  // If we change signature to remove taiKhoanId, we break UI.
+  // If we keep it, we should ensure it matches Phien or just use Phien.
+  // For safety, let's keep the signature but ignore logical conflict (or assert).
+  // Actually, 'taiKhoanId' is now 'String'. The UI is likely calling with 'phien.currentUser.id' anyway.
+  // Wait, if UI code hasn't been updated, it might try to pass an INT id.
+  // But the UI gets the ID from `Phien`. I updated `Phien` to return String.
+  // So the UI compilation will break if I don't update UI.
+  // Since I can't see UI, I can assume UI gets ID from Phien.
+  // So I should change 'int taiKhoanId' to 'String taiKhoanId'.
+  
   Future<TongQuanThang> taiDuLieuThang({
-    required int taiKhoanId,
+    required String taiKhoanId, // Changed from int
     required DateTime thangDangXem,
   }) async {
     final (start, next) = _khoangThang(thangDangXem);
     final startMs = start.millisecondsSinceEpoch;
     final endMs = next.millisecondsSinceEpoch;
 
-    final dsDanhMuc = await repo.layDanhMuc();
+    // Use taiKhoanId passed in
+    final dsDanhMuc = await repo.layDanhMuc(taiKhoanId);
     final mapTenDanhMuc = {for (final d in dsDanhMuc) d.id: d.ten};
 
     final nganSach = await repo.layNganSachThang(
-          taiKhoanId: taiKhoanId,
+          userId: taiKhoanId,
           nam: thangDangXem.year,
           thang: thangDangXem.month,
         ) ??
         0;
-    // Tính tổng chi (chỉ tính từ ngân sách, KHÔNG tính từ ví)
+    
     final daChi = await repo.tinhTongChiTrongKhoang(
-      taiKhoanId: taiKhoanId,
+      userId: taiKhoanId,
       startMs: startMs,
       endMs: endMs,
       chiTuNganSach: true, 
     );
 
     final raw = await repo.layGiaoDichTrongKhoang(
-      taiKhoanId: taiKhoanId,
+      userId: taiKhoanId,
       startMs: startMs,
       endMs: endMs,
     );
@@ -59,12 +84,12 @@ class XuLyThuChiService {
   }
 
   Future<void> datNganSachThang({
-    required int taiKhoanId,
+    required String taiKhoanId,
     required DateTime thangDangXem,
     required int soTienNganSach,
   }) async {
     await repo.capNhatNganSachThang(
-      taiKhoanId: taiKhoanId,
+      userId: taiKhoanId,
       nam: thangDangXem.year,
       thang: thangDangXem.month,
       soTienNganSach: soTienNganSach,
@@ -72,15 +97,15 @@ class XuLyThuChiService {
   }
 
   Future<void> themKhoanChi({
-    required int taiKhoanId,
+    required String taiKhoanId,
     required int soTien,
-    required int danhMucId,
-    required int? viTienId,
+    required String danhMucId,
+    required String? viTienId,
     required DateTime ngay,
     String? ghiChu,
   }) async {
     await repo.themGiaoDich(
-      taiKhoanId: taiKhoanId,
+      userId: taiKhoanId,
       soTien: soTien,
       danhMucId: danhMucId,
       viTienId: viTienId,
@@ -89,33 +114,65 @@ class XuLyThuChiService {
     );
   }
 
-  Future<List<ViTien>> layDanhSachVi() => repo.layDanhSachVi();
+  // Refactored methods that didn't have ID before
+  
+  Future<List<ViTien>> layDanhSachVi() async {
+    final uid = await _getUserId();
+    return repo.layDanhSachVi(uid);
+  }
+
+  // Public wrapper to get categories. FE should call this instead of accessing repo directly.
+  Future<List<DanhMuc>> layDanhMuc() async {
+    final uid = await _getUserId();
+    return repo.layDanhMuc(uid);
+  }
+
+  Future<void> seedDefaultCategories() async {
+    final uid = await _getUserId();
+    return repo.seedDefaultCategories(uid);
+  }
+
+  Future<void> seedDefaultWallets() async {
+    final uid = await _getUserId();
+    await repo.seedDefaultWallets(uid);
+  }
 
   Future<void> themVi({
     required String ten,
     required String loai,
     required int soDu,
     String? icon,
-  }) =>
-      repo.themVi(ten: ten, loai: loai, soDu: soDu, icon: icon);
+  }) async {
+    final uid = await _getUserId();
+    return repo.themVi(userId: uid, ten: ten, loai: loai, soDu: soDu, icon: icon);
+  }
 
-  Future<void> capNhatSoDuVi(int viId, int soDuMoi) =>
-      repo.capNhatSoDuVi(viId, soDuMoi);
+  Future<void> capNhatSoDuVi(String viId, int soDuMoi) async {
+    final uid = await _getUserId();
+    return repo.capNhatSoDuVi(uid, viId, soDuMoi);
+  }
 
-  Future<void> xoaVi(int id) => repo.xoaVi(id);
+  Future<void> xoaVi(String id) async {
+    final uid = await _getUserId();
+    return repo.xoaVi(uid, id);
+  }
 
-  Future<void> suaVi(int id, String ten, String loai, String? icon) =>
-      repo.suaVi(id, ten, loai, icon);
+  Future<void> suaVi(String id, String ten, String loai, String? icon) async {
+    final uid = await _getUserId();
+    return repo.suaVi(uid, id, ten, loai, icon);
+  }
 
   Future<void> suaGiaoDich({
-    required int id,
+    required String id,
     required int soTien,
-    required int danhMucId,
-    required int? viTienId,
+    required String danhMucId,
+    required String? viTienId,
     required DateTime ngay,
     String? ghiChu,
-  }) =>
-      repo.suaGiaoDich(
+  }) async {
+    final uid = await _getUserId();
+    return repo.suaGiaoDich(
+        userId: uid,
         id: id,
         soTienMoi: soTien,
         danhMucIdMoi: danhMucId,
@@ -123,27 +180,34 @@ class XuLyThuChiService {
         ngayMoi: ngay,
         ghiChuMoi: ghiChu,
       );
+  }
 
-  Future<void> xoaGiaoDich(int id) => repo.xoaGiaoDich(id);
+  Future<void> xoaGiaoDich(String id) async {
+    final uid = await _getUserId();
+    return repo.xoaGiaoDich(uid, id);
+  }
 
-  Future<int> layTongChiTieuTheoVi(int viId) => repo.layTongChiTieuTheoVi(viId);
+  Future<int> layTongChiTieuTheoVi(String viId) async {
+    final uid = await _getUserId();
+    return repo.layTongChiTieuTheoVi(uid, viId);
+  }
 
   Future<List<Map<String, Object?>>> layThongKeTheoDanhMuc({
-    required int taiKhoanId,
+    required String taiKhoanId,
     required DateTime thang,
   }) {
     final (start, next) = _khoangThang(thang);
     return repo.thongKeTheoDanhMuc(
-      taiKhoanId: taiKhoanId,
+      userId: taiKhoanId,
       startMs: start.millisecondsSinceEpoch,
       endMs: next.millisecondsSinceEpoch,
     );
   }
 
   Future<List<Map<String, Object?>>> layThongKeTheoNam({
-    required int taiKhoanId,
+    required String taiKhoanId,
     required int nam,
   }) {
-    return repo.thongKeTheoThoiGian(taiKhoanId: taiKhoanId, nam: nam);
+    return repo.thongKeTheoThoiGian(userId: taiKhoanId, nam: nam);
   }
 }

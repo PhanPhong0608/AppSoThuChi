@@ -19,7 +19,7 @@ class AppShell extends StatefulWidget {
     required this.onLogout,
   });
 
-  final int taiKhoanId;
+  final String taiKhoanId;
   final XuLyThuChiService thuChiService;
   final PhienDangNhap phien;
   final KhoTaiKhoanRepository khoTaiKhoanRepo;

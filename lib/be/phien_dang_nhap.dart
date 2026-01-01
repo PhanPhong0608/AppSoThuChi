@@ -1,20 +1,24 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PhienDangNhap {
-  static const _keyUserId = "user_id";
+  static const _kUserIdKey = "user_id";
 
-  Future<int?> layUserId() async {
+  Future<void> luuUserId(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_keyUserId);
+    await prefs.setString(_kUserIdKey, userId);
   }
 
-  Future<void> luuUserId(int id) async {
+  Future<String?> layUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyUserId, id);
+    return prefs.getString(_kUserIdKey);
   }
 
-  Future<void> dangXuat() async {
+  Future<void> xoaUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyUserId);
+    await prefs.remove(_kUserIdKey);
   }
+
+  // ✅ thêm cho đồng bộ tên gọi
+  Future<void> dangNhap(String uid) => luuUserId(uid);
+  Future<void> dangXuat() => xoaUserId();
 }

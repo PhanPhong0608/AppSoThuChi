@@ -1,51 +1,155 @@
-import 'package:sqflite/sqflite.dart';
-
-import '../db/so_thu_chi_db.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../db/models/danh_muc.dart';
 import '../db/models/giao_dich.dart';
 import '../db/models/vi_tien.dart';
 
 class KhoThuChiRepository {
-  final SoThuChiDb _db;
-  KhoThuChiRepository(this._db);
+  KhoThuChiRepository();
 
-  Database get db => _db.db;
+  final DatabaseReference _root = FirebaseDatabase.instance.ref();
+  DatabaseReference _userRef(String uid) => _root.child('users').child(uid);
 
-  Future<List<DanhMuc>> layDanhMuc() async {
-    final rows = await db.query("danh_muc", orderBy: "id ASC");
-    return rows.map((e) => DanhMuc.fromMap(e)).toList();
+  Map<String, dynamic> _normalizeSnapshotValue(dynamic value) {
+    if (value == null) return {};
+    if (value is Map) {
+      final out = <String, dynamic>{};
+      value.forEach((k, v) => out[k.toString()] = v);
+      return out;
+    }
+    if (value is List) {
+      final out = <String, dynamic>{};
+      for (var i = 0; i < value.length; i++) {
+        final v = value[i];
+        if (v != null) out[i.toString()] = v;
+      }
+      return out;
+    }
+    return {};
   }
 
-  Future<List<ViTien>> layDanhSachVi() async {
-    final rows = await db.query("vi_tien", where: "an = 0", orderBy: "id ASC");
-    return rows.map((e) => ViTien.fromMap(e)).toList();
+  Future<List<DanhMuc>> layDanhMuc(String uid) async {
+    final snap = await _userRef(uid).child('categories').get();
+    final val = snap.value;
+
+    if (val is! Map) return [];
+
+    final list = <DanhMuc>[];
+    val.forEach((key, value) {
+      if (value is Map) {
+        list.add(DanhMuc(
+          id: key.toString(),
+          ten: (value['ten'] ?? '').toString(),
+          loai: (value['loai'] ?? 'expense').toString(),
+        ));
+      }
+    });
+
+    final uniq = <String, DanhMuc>{};
+    for (final dm in list) {
+      final k = '${dm.ten.trim().toLowerCase()}|${dm.loai.trim().toLowerCase()}';
+      uniq.putIfAbsent(k, () => dm);
+    }
+
+    return uniq.values.toList()
+      ..sort((a, b) => a.ten.compareTo(b.ten));
   }
 
-  Future<void> suaVi(int id, String ten, String loai, String? icon) async {
-    await db.update(
-      "vi_tien",
-      {"ten": ten, "loai": loai, "icon": icon},
-      where: "id = ?",
-      whereArgs: [id],
-    );
+
+  /// Create default categories for a user (used when none exist)
+  Future<void> seedDefaultCategories(String uid) async {
+    final ref = _userRef(uid).child('categories');
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // ID cố định (em có thể đổi tên key nếu muốn)
+    final defaults = <String, Map<String, dynamic>>{
+      'dm_an_uong': {'ten': 'Ăn uống', 'loai': 'expense', 'tao_luc': now},
+      'dm_mua_sam': {'ten': 'Mua sắm', 'loai': 'expense', 'tao_luc': now},
+      'dm_di_chuyen': {'ten': 'Di chuyển', 'loai': 'expense', 'tao_luc': now},
+      'dm_hoa_don': {'ten': 'Hóa đơn', 'loai': 'expense', 'tao_luc': now},
+      'dm_giao_duc': {'ten': 'Giáo dục', 'loai': 'expense', 'tao_luc': now},
+      'dm_giai_tri': {'ten': 'Giải trí', 'loai': 'expense', 'tao_luc': now},
+      'dm_suc_khoe': {'ten': 'Sức khỏe', 'loai': 'expense', 'tao_luc': now},
+      'dm_khac': {'ten': 'Khác', 'loai': 'expense', 'tao_luc': now},
+    };
+
+    // update() sẽ tạo/ghi đè theo key -> gọi nhiều lần cũng không trùng
+    await ref.update(defaults);
   }
 
-  Future<void> xoaVi(int id) async {
-    await db.update(
-      "vi_tien",
-      {"an": 1},
-      where: "id = ?",
-      whereArgs: [id],
-    );
+
+  /// Tạo sẵn 2 ví mặc định nếu user chưa có ví nào.
+  /// - Tiền mặt
+  /// - Ngân hàng
+  Future<void> seedDefaultWallets(String userId) async {
+    final walletsRef = _userRef(userId).child("wallets");
+    final snap = await walletsRef.get();
+    if (snap.exists) return;
+
+    await walletsRef.push().set({
+      "ten": "Tiền mặt",
+      "loai": "cash",
+      "so_du": 0,
+      "icon": "💵",
+      "an": 0,
+    });
+
+    await walletsRef.push().set({
+      "ten": "Ngân hàng",
+      "loai": "bank",
+      "so_du": 0,
+      "icon": "🏦",
+      "an": 0,
+    });
+  }
+
+  Future<List<ViTien>> layDanhSachVi(String userId) async {
+    final snapshot =
+        await _userRef(userId).child("wallets").orderByChild("an").equalTo(0).get();
+    if (!snapshot.exists) return [];
+    final raw = snapshot.value;
+    final data = _normalizeSnapshotValue(raw);
+    if (data.isEmpty) return [];
+    final out = <ViTien>[];
+    for (final e in data.entries) {
+      final v = e.value;
+      if (v is Map) {
+        final val = Map<String, Object?>.from(v);
+        val['id'] = e.key;
+        out.add(ViTien.fromMap(val));
+      } else {
+        out.add(ViTien.fromMap({
+          'id': e.key,
+          'ten': v?.toString() ?? '',
+          'so_du': 0,
+          'an': 0
+        }));
+      }
+    }
+    return out;
+  }
+
+  Future<void> suaVi(String userId, String id, String ten, String loai, String? icon) async {
+    await _userRef(userId).child("wallets").child(id).update({
+      "ten": ten,
+      "loai": loai,
+      "icon": icon,
+    });
+  }
+
+  Future<void> xoaVi(String userId, String id) async {
+    // Soft delete: DB dùng int 0/1 cho an
+    await _userRef(userId).child("wallets").child(id).update({"an": 1});
   }
 
   Future<void> themVi({
+    required String userId,
     required String ten,
     required String loai,
     required int soDu,
     String? icon,
   }) async {
-    await db.insert("vi_tien", {
+    await _userRef(userId).child("wallets").push().set({
       "ten": ten,
       "loai": loai,
       "so_du": soDu,
@@ -54,241 +158,256 @@ class KhoThuChiRepository {
     });
   }
 
-  Future<void> capNhatSoDuVi(int viId, int soDuMoi) async {
-    await db.update(
-      "vi_tien",
-      {"so_du": soDuMoi},
-      where: "id = ?",
-      whereArgs: [viId],
-    );
+  Future<void> capNhatSoDuVi(String userId, String viId, int soDuMoi) async {
+    await _userRef(userId).child("wallets").child(viId).update({"so_du": soDuMoi});
   }
 
-  Future<void> congTienVaoVi(int viId, int soTien) async {
-    await db.rawUpdate(
-        "UPDATE vi_tien SET so_du = so_du + ? WHERE id = ?", [soTien, viId]);
+  Future<void> congTienVaoVi(String userId, String viId, int soTien) async {
+    final ref = _userRef(userId).child("wallets").child(viId).child("so_du");
+    await ref.runTransaction((currentData) {
+      if (currentData == null) return Transaction.success(soTien);
+      final val = (currentData as int? ?? 0);
+      return Transaction.success(val + soTien);
+    });
   }
 
-  Future<void> truTienTuVi(int viId, int soTien) async {
-    await db.rawUpdate(
-        "UPDATE vi_tien SET so_du = so_du - ? WHERE id = ?", [soTien, viId]);
+  Future<void> truTienTuVi(String userId, String viId, int soTien) async {
+    final ref = _userRef(userId).child("wallets").child(viId).child("so_du");
+    await ref.runTransaction((currentData) {
+      if (currentData == null) return Transaction.success(-soTien);
+      final val = (currentData as int? ?? 0);
+      return Transaction.success(val - soTien);
+    });
   }
 
   Future<void> capNhatNganSachThang({
-    required int taiKhoanId,
+    required String userId,
     required int nam,
     required int thang,
     required int soTienNganSach,
   }) async {
-    await db.insert(
-      "ngan_sach_thang",
-      {
-        "tai_khoan_id": taiKhoanId,
-        "nam": nam,
-        "thang": thang,
-        "so_tien_ngan_sach": soTienNganSach
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final key = "$nam-$thang";
+    await _userRef(userId).child("budgets").child(key).set(soTienNganSach);
   }
 
   Future<int?> layNganSachThang({
-    required int taiKhoanId,
+    required String userId,
     required int nam,
     required int thang,
   }) async {
-    final rows = await db.query(
-      "ngan_sach_thang",
-      columns: ["so_tien_ngan_sach"],
-      where: "tai_khoan_id = ? AND nam = ? AND thang = ?",
-      whereArgs: [taiKhoanId, nam, thang],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return rows.first["so_tien_ngan_sach"] as int;
+    final key = "$nam-$thang";
+    final snapshot = await _userRef(userId).child("budgets").child(key).get();
+    if (snapshot.exists) {
+      return (snapshot.value as int?);
+    }
+    return null;
   }
 
-  Future<int> themGiaoDich({
-    required int taiKhoanId,
+  Future<String> themGiaoDich({
+    required String userId,
     required int soTien,
-    required int danhMucId,
-    required int? viTienId,
+    required String danhMucId,
+    required String? viTienId,
     required DateTime ngay,
     String? ghiChu,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    return await db.transaction((txn) async {
-      final id = await txn.insert("giao_dich", {
-        "tai_khoan_id": taiKhoanId,
-        "so_tien": soTien,
-        "danh_muc_id": danhMucId,
-        "vi_tien_id": viTienId,
-        "ngay": ngay.millisecondsSinceEpoch,
-        "ghi_chu": ghiChu,
-        "tao_luc": now,
-      });
 
-      // Trừ tiền trong ví nếu có chọn ví
-      if (viTienId != null) {
-        // Lấy số dư hiện tại
-        final viRow = await txn.query("vi_tien",
-            columns: ["so_du"], where: "id = ?", whereArgs: [viTienId]);
-        if (viRow.isNotEmpty) {
-          final hienTai = (viRow.first["so_du"] as int?) ?? 0;
-          await txn.update(
-            "vi_tien",
-            {"so_du": hienTai - soTien},
-            where: "id = ?",
-            whereArgs: [viTienId],
-          );
-        }
-      }
-      return id;
-    });
+    final txnRef = _userRef(userId).child("transactions").push();
+    final txnId = txnRef.key!;
+
+    final txnData = {
+      "so_tien": soTien,
+      "danh_muc_id": danhMucId,
+      "vi_tien_id": viTienId,
+      "ngay": ngay.millisecondsSinceEpoch,
+      "ghi_chu": ghiChu,
+      "tao_luc": now,
+    };
+
+    await txnRef.set(txnData);
+
+    if (viTienId != null) {
+      await truTienTuVi(userId, viTienId, soTien);
+    }
+
+    return txnId;
   }
 
   Future<void> suaGiaoDich({
-    required int id,
+    required String userId,
+    required String id,
     required int soTienMoi,
-    required int danhMucIdMoi,
-    required int? viTienIdMoi,
+    required String danhMucIdMoi,
+    required String? viTienIdMoi,
     required DateTime ngayMoi,
     String? ghiChuMoi,
   }) async {
-    await db.transaction((txn) async {
-      // 1. Lấy giao dịch cũ
-      final oldRows =
-          await txn.query("giao_dich", where: "id = ?", whereArgs: [id]);
-      if (oldRows.isEmpty) return;
-      final old = oldRows.first;
-      final oldSoTien = old["so_tien"] as int;
-      final oldViId = old["vi_tien_id"] as int?;
+    final snap = await _userRef(userId).child("transactions").child(id).get();
+    if (!snap.exists) return;
+    final oldRaw = _normalizeSnapshotValue(snap.value);
+    final oldSoTien = (oldRaw['so_tien'] as int?) ?? 0;
+    final oldViId = oldRaw['vi_tien_id'] as String?;
 
-      // 2. Hoàn lại tiền cho ví cũ (nếu có)
-      if (oldViId != null) {
-        await txn.rawUpdate(
-            "UPDATE vi_tien SET so_du = so_du + ? WHERE id = ?",
-            [oldSoTien, oldViId]);
-      }
+    if (oldViId != null) {
+      await congTienVaoVi(userId, oldViId, oldSoTien);
+    }
 
-      // 3. Trừ tiền ví mới (nếu có)
-      if (viTienIdMoi != null) {
-        await txn.rawUpdate(
-            "UPDATE vi_tien SET so_du = so_du - ? WHERE id = ?",
-            [soTienMoi, viTienIdMoi]);
-      }
+    if (viTienIdMoi != null) {
+      await truTienTuVi(userId, viTienIdMoi, soTienMoi);
+    }
 
-      // 4. Update giao dịch
-      await txn.update(
-        "giao_dich",
-        {
-          "so_tien": soTienMoi,
-          "danh_muc_id": danhMucIdMoi,
-          "vi_tien_id": viTienIdMoi,
-          "ngay": ngayMoi.millisecondsSinceEpoch,
-          "ghi_chu": ghiChuMoi,
-        },
-        where: "id = ?",
-        whereArgs: [id],
-      );
+    await _userRef(userId).child("transactions").child(id).update({
+      "so_tien": soTienMoi,
+      "danh_muc_id": danhMucIdMoi,
+      "vi_tien_id": viTienIdMoi,
+      "ngay": ngayMoi.millisecondsSinceEpoch,
+      "ghi_chu": ghiChuMoi,
     });
   }
 
-  Future<void> xoaGiaoDich(int id) async {
-    await db.transaction((txn) async {
-      final oldRows =
-          await txn.query("giao_dich", where: "id = ?", whereArgs: [id]);
-      if (oldRows.isEmpty) return;
-      final old = oldRows.first;
-      final oldSoTien = old["so_tien"] as int;
-      final oldViId = old["vi_tien_id"] as int?;
+  Future<void> xoaGiaoDich(String userId, String id) async {
+    final snap = await _userRef(userId).child("transactions").child(id).get();
+    if (!snap.exists) return;
+    final oldRaw = _normalizeSnapshotValue(snap.value);
+    final oldSoTien = (oldRaw['so_tien'] as int?) ?? 0;
+    final oldViId = oldRaw['vi_tien_id'] as String?;
 
-      // Hoàn tiền lại ví
-      if (oldViId != null) {
-        await txn.rawUpdate(
-            "UPDATE vi_tien SET so_du = so_du + ? WHERE id = ?",
-            [oldSoTien, oldViId]);
-      }
+    if (oldViId != null) {
+      await congTienVaoVi(userId, oldViId, oldSoTien);
+    }
 
-      await txn.delete("giao_dich", where: "id = ?", whereArgs: [id]);
-    });
+    await _userRef(userId).child("transactions").child(id).remove();
   }
 
   Future<int> tinhTongChiTrongKhoang({
-    required int taiKhoanId,
+    required String userId,
     required int startMs,
     required int endMs,
     bool chiTuNganSach = false,
   }) async {
-    String where = "tai_khoan_id = ? AND ngay >= ? AND ngay < ?";
-    List<Object?> args = [taiKhoanId, startMs, endMs];
+    final snap = await _userRef(userId)
+        .child("transactions")
+        .orderByChild("ngay")
+        .startAt(startMs)
+        .endAt(endMs - 1)
+        .get();
 
-    if (chiTuNganSach) {
-      where += " AND vi_tien_id IS NULL";
+    if (!snap.exists) return 0;
+
+    int sum = 0;
+    final data = _normalizeSnapshotValue(snap.value);
+    for (final v in data.values) {
+      if (v is Map) {
+        final soTien = (v['so_tien'] as int?) ?? 0;
+        final viId = v['vi_tien_id'];
+        if (chiTuNganSach) {
+          if (viId == null) sum += soTien;
+        } else {
+          sum += soTien;
+        }
+      }
     }
-
-    final rows = await db.rawQuery('''
-SELECT COALESCE(SUM(so_tien), 0) AS da_chi
-FROM giao_dich
-WHERE $where;
-''', args);
-
-    return (rows.first["da_chi"] as int?) ?? 0;
+    return sum;
   }
 
   Future<List<GiaoDich>> layGiaoDichTrongKhoang({
-    required int taiKhoanId,
+    required String userId,
     required int startMs,
     required int endMs,
   }) async {
-    final rows = await db.query(
-      "giao_dich",
-      where: "tai_khoan_id = ? AND ngay >= ? AND ngay < ?",
-      whereArgs: [taiKhoanId, startMs, endMs],
-      orderBy: "ngay DESC, id DESC",
-    );
-    return rows.map((e) => GiaoDich.fromMap(e)).toList();
+    final snap = await _userRef(userId)
+        .child("transactions")
+        .orderByChild("ngay")
+        .startAt(startMs)
+        .endAt(endMs - 1)
+        .get();
+
+    if (!snap.exists) return [];
+
+    final data = _normalizeSnapshotValue(snap.value);
+    final list = data.entries.map((e) {
+      final v = e.value;
+      if (v is Map) {
+        final val = Map<String, Object?>.from(v);
+        val['id'] = e.key;
+        return GiaoDich.fromMap(val);
+      }
+      return GiaoDich.fromMap({
+        'id': e.key,
+        'so_tien': 0,
+        'danh_muc_id': '',
+        'ngay': startMs,
+      });
+    }).toList();
+
+    list.sort((a, b) {
+      int cmp = b.ngay.compareTo(a.ngay);
+      if (cmp != 0) return cmp;
+      return b.id.compareTo(a.id);
+    });
+
+    return list;
   }
 
   Future<List<Map<String, Object?>>> thongKeTheoDanhMuc({
-    required int taiKhoanId,
+    required String userId,
     required int startMs,
     required int endMs,
   }) async {
-    return await db.rawQuery('''
-      SELECT d.ten, d.mau, SUM(g.so_tien) as tong_tien
-      FROM giao_dich g
-      JOIN danh_muc d ON g.danh_muc_id = d.id
-      WHERE g.tai_khoan_id = ? AND g.ngay >= ? AND g.ngay < ?
-      GROUP BY d.id
-    ''', [taiKhoanId, startMs, endMs]);
+    final txns = await layGiaoDichTrongKhoang(userId: userId, startMs: startMs, endMs: endMs);
+    final cats = await layDanhMuc(userId);
+    final catMap = {for (var c in cats) c.id: c};
+
+    final result = <String, int>{};
+    for (var t in txns) {
+      result[t.danhMucId] = (result[t.danhMucId] ?? 0) + t.soTien;
+    }
+
+    return result.entries.map((e) {
+      final c = catMap[e.key];
+      return {
+        "ten": c?.ten ?? "Khác",
+        "mau": 0xFF000000,
+        "tong_tien": e.value,
+      };
+    }).toList();
   }
 
   Future<List<Map<String, Object?>>> thongKeTheoThoiGian({
-    required int taiKhoanId,
+    required String userId,
     required int nam,
   }) async {
-    // Thống kê theo tháng trong năm
-    // SQLite strftime('%m', ...) trả về tháng 01-12
-    return await db.rawQuery('''
-      SELECT strftime('%m', datetime(ngay / 1000, 'unixepoch', 'localtime')) as thang,
-             SUM(so_tien) as tong_tien
-      FROM giao_dich
-      WHERE tai_khoan_id = ? 
-        AND ngay >= ? 
-        AND ngay < ?
-      GROUP BY thang
-    ''', [
-      taiKhoanId,
-      DateTime(nam, 1, 1).millisecondsSinceEpoch,
-      DateTime(nam + 1, 1, 1).millisecondsSinceEpoch
-    ]);
+    final start = DateTime(nam, 1, 1).millisecondsSinceEpoch;
+    final end = DateTime(nam + 1, 1, 1).millisecondsSinceEpoch;
 
+    final txns = await layGiaoDichTrongKhoang(userId: userId, startMs: start, endMs: end);
+
+    final map = <String, int>{};
+    for (var t in txns) {
+      final m = t.ngay.month.toString().padLeft(2, '0');
+      map[m] = (map[m] ?? 0) + t.soTien;
+    }
+
+    return map.entries.map((e) => {"thang": e.key, "tong_tien": e.value}).toList();
   }
 
-  Future<int> layTongChiTieuTheoVi(int viId) async {
-    final rows = await db.rawQuery(
-        "SELECT COALESCE(SUM(so_tien), 0) as da_chi FROM giao_dich WHERE vi_tien_id = ?",
-        [viId]);
-    return (rows.first["da_chi"] as int?) ?? 0;
+  Future<int> layTongChiTieuTheoVi(String userId, String viId) async {
+    final snap = await _userRef(userId)
+        .child("transactions")
+        .orderByChild("vi_tien_id")
+        .equalTo(viId)
+        .get();
+
+    if (!snap.exists) return 0;
+
+    int sum = 0;
+    final data = _normalizeSnapshotValue(snap.value);
+    for (var v in data.values) {
+      if (v is Map) {
+        sum += (v['so_tien'] as int?) ?? 0;
+      }
+    }
+    return sum;
   }
 }

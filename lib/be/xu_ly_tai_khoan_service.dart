@@ -1,46 +1,73 @@
-import 'dart:convert';
-import 'dart:math';
-import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../db/models/tai_khoan.dart';
 import 'kho_tai_khoan_repository.dart';
+import 'phien_dang_nhap.dart';
 
 class XuLyTaiKhoanService {
-  final KhoTaiKhoanRepository repo;
-  XuLyTaiKhoanService(this.repo);
+  final KhoTaiKhoanRepository _repo;
 
-  String _taoSalt() {
-    final r = Random.secure();
-    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
-    return base64UrlEncode(bytes);
+  XuLyTaiKhoanService(this._repo);
+
+  /// ✅ Đăng ký:
+  /// - FirebaseAuth tự login sau khi tạo user
+  /// - Nếu em muốn đăng ký xong QUAY VỀ màn login => keep autoSignOut = true
+  Future<TaiKhoan> dangKy({
+    required String email,
+    required String matKhau,
+    required PhienDangNhap phien,
+    bool autoSignOut = true,
+  }) async {
+    final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: matKhau,
+    );
+
+    final user = cred.user!;
+    final uid = user.uid;
+
+    // ✅ giúp RTDB nhận auth token ngay
+    await user.getIdToken(true);
+
+    // tạo/đảm bảo hồ sơ
+    await _repo.upsertHoSo(uid: uid, email: email.trim());
+    await phien.dangNhap(uid);
+
+    final tk = TaiKhoan(id: uid, email: email.trim());
+
+    // ✅ nếu muốn quay về đăng nhập
+    if (autoSignOut) {
+      await FirebaseAuth.instance.signOut();
+      await phien.dangXuat();
+    }
+
+    return tk;
   }
 
-  String _hash(String matKhau, String salt) {
-    return sha256.convert(utf8.encode("$salt:$matKhau")).toString();
+  Future<TaiKhoan> dangNhap({
+    required String email,
+    required String matKhau,
+    required PhienDangNhap phien,
+  }) async {
+    final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: matKhau,
+    );
+
+    final user = cred.user!;
+    final uid = user.uid;
+
+    await user.getIdToken(true);
+
+    // đảm bảo có hồ sơ
+    await _repo.upsertHoSo(uid: uid, email: email.trim());
+    await phien.dangNhap(uid);
+
+    return TaiKhoan(id: uid, email: email.trim());
   }
 
-  Future<int> dangKy({required String email, required String matKhau}) async {
-    email = email.trim().toLowerCase();
-    if (email.isEmpty || !email.contains("@")) throw Exception("Email không hợp lệ.");
-    if (matKhau.length < 6) throw Exception("Mật khẩu phải từ 6 ký tự.");
-
-    final existed = await repo.timTheoEmail(email);
-    if (existed != null) throw Exception("Email đã tồn tại.");
-
-    final salt = _taoSalt();
-    final hash = _hash(matKhau, salt);
-    return repo.taoTaiKhoan(email: email, matKhauHash: hash, salt: salt);
-  }
-
-  Future<int> dangNhap({required String email, required String matKhau}) async {
-    email = email.trim().toLowerCase();
-    final row = await repo.layRowTheoEmail(email);
-    if (row == null) throw Exception("Sai email hoặc mật khẩu.");
-
-    final salt = row["salt"] as String;
-    final hashDb = row["mat_khau_hash"] as String;
-    final hashInput = _hash(matKhau, salt);
-
-    if (hashInput != hashDb) throw Exception("Sai email hoặc mật khẩu.");
-    return row["id"] as int;
+  Future<void> dangXuat(PhienDangNhap phien) async {
+    await FirebaseAuth.instance.signOut();
+    await phien.dangXuat();
   }
 }

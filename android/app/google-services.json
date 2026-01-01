@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "543220830396",
+    "firebase_url": "https://appsothuchi-86913-default-rtdb.firebaseio.com",
+    "project_id": "appsothuchi-86913",
+    "storage_bucket": "appsothuchi-86913.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:543220830396:android:4020b4f6961086d133c0b9",
+        "android_client_info": {
+          "package_name": "com.example.nhom1_sothuchi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoBTLHkGQ40KVzneGdHfax1ATeEn0V5qM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

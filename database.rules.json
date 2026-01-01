@@ -1,0 +1,45 @@
+{
+    "rules": {
+        "users": {
+            ".indexOn": ["email"],
+            "$uid": {
+                ".read": "true",
+                ".write": "true",
+                "email": {
+                    ".validate": "newData.isString()"
+                },
+                "mat_khau_hash": {
+                    ".validate": "newData.isString()"
+                },
+                "salt": {
+                    ".validate": "newData.isString()"
+                },
+                "tao_luc": {
+                    ".validate": "newData.isNumber()"
+                },
+                "categories": {
+                    "$categoryId": {
+                        ".validate": "newData.hasChildren(['ten', 'loai'])"
+                    }
+                },
+                "wallets": {
+                    ".indexOn": ["an"],
+                    "$walletId": {
+                        ".validate": "newData.hasChildren(['ten', 'loai', 'so_du', 'an'])"
+                    }
+                },
+                "transactions": {
+                    ".indexOn": ["ngay", "vi_tien_id"],
+                    "$txnId": {
+                        ".validate": "newData.hasChildren(['so_tien', 'danh_muc_id', 'ngay', 'tao_luc'])"
+                    }
+                },
+                "budgets": {
+                    "$budgetKey": {
+                        ".validate": "newData.isNumber()"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -15,9 +15,8 @@ class TrangTongQuanPage extends StatefulWidget {
     required this.service,
   });
 
-  final int taiKhoanId;
+  final String taiKhoanId;
   final XuLyThuChiService service;
-  
 
   @override
   State<TrangTongQuanPage> createState() => TrangTongQuanPageState();
@@ -31,15 +30,22 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
   TongQuanThang? tongQuan;
   bool loading = true;
 
-  // ✅ Mặc định lọc theo NGÀY HÔM NAY
+  // ✅ Mặc định lọc theo NGÀY HÔM NAY (chỉ phần ngày)
   DateTime? ngayLoc;
+
+  // Map cache tên ví
+  final Map<String, String> dsViMap = {};
 
   @override
   void initState() {
     super.initState();
 
-    // Lấy "hôm nay" (chỉ lấy phần ngày)
     final now = DateTime.now();
+
+    // ✅ set tháng đang xem = tháng hiện tại
+    thangDangXem = DateTime(now.year, now.month, 1);
+
+    // ✅ mặc định lọc theo ngày hôm nay
     ngayLoc = DateTime(now.year, now.month, now.day);
 
     _taiDuLieu();
@@ -51,32 +57,37 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     super.dispose();
   }
 
+  bool _cungNgay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<void> _taiDuLieu() async {
     setState(() => loading = true);
-    // Fetch danh sách ví để map ID sang Tên (nếu cần hiển thị tên ví)
-    // Nhưng GiaoDich model hiện tại chưa có tên Ví.
-    // Cách nhanh: load dsVi vào 1 Map<int, String>
-    dsViMap.clear();
-    final listVi = await widget.service.layDanhSachVi();
-    for (var v in listVi) {
-      dsViMap[v.id] = v.ten;
-    }
+    try {
+      // Fetch danh sách ví để map ID sang Tên
+      dsViMap.clear();
+      final listVi = await widget.service.layDanhSachVi();
+      for (var v in listVi) {
+        dsViMap[v.id] = v.ten;
+      }
 
-    tongQuan = await widget.service.taiDuLieuThang(
-      taiKhoanId: widget.taiKhoanId,
-      thangDangXem: thangDangXem,
-    );
-    if (mounted) setState(() => loading = false);
+      tongQuan = await widget.service.taiDuLieuThang(
+        taiKhoanId: widget.taiKhoanId,
+        thangDangXem: thangDangXem,
+      );
+    } catch (e, st) {
+      debugPrint('TrangTongQuanPage: error _taiDuLieu: $e\n$st');
+      tongQuan = null;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi tải dữ liệu: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
   Future<void> taiLai() => _taiDuLieu();
-
-  // Map cache tên ví
-  final Map<int, String> dsViMap = {};
-
-  bool _cungNgay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 
   void _thangTruoc() {
     final y = thangDangXem.year;
@@ -126,7 +137,8 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
             child: const Text("Hủy"),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, int.tryParse(ctrl.text.trim())),
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(ctrl.text.trim())),
             child: const Text("Lưu"),
           ),
         ],
@@ -144,6 +156,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     await taiLai();
   }
 
+  // ✅ CHỌN NGÀY: tự nhảy về đúng tháng của ngày đó + reload
   Future<void> _chonNgayLoc() async {
     final now = DateTime.now();
     final init = ngayLoc ?? DateTime(now.year, now.month, now.day);
@@ -156,13 +169,28 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     );
     if (picked == null) return;
 
-    // ✅ lưu ngày lọc (chỉ phần ngày)
-    setState(() => ngayLoc = DateTime(picked.year, picked.month, picked.day));
+    final pickedDay = DateTime(picked.year, picked.month, picked.day);
+    final pickedMonth = DateTime(picked.year, picked.month, 1);
+
+    setState(() {
+      ngayLoc = pickedDay;
+      thangDangXem = pickedMonth;
+    });
+
+    await taiLai();
   }
 
-  void _boLocNgay() {
+  // ✅ VỀ HÔM NAY: cũng phải về đúng tháng hiện tại + reload
+  void _boLocNgay() async {
     final now = DateTime.now();
-    setState(() => ngayLoc = DateTime(now.year, now.month, now.day));
+    final today = DateTime(now.year, now.month, now.day);
+
+    setState(() {
+      thangDangXem = DateTime(now.year, now.month, 1);
+      ngayLoc = today;
+    });
+
+    await taiLai();
   }
 
   Future<void> _xoaGiaoDich(GiaoDich g) async {
@@ -173,11 +201,13 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
         content: const Text("Bạn có chắc chắn muốn xóa không?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Hủy")),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Hủy"),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Xóa")),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Xóa"),
+          ),
         ],
       ),
     );
@@ -190,7 +220,17 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
   Future<void> _suaGiaoDich(GiaoDich g) async {
     final dsVi = await widget.service.layDanhSachVi();
-    final danhMuc = await widget.service.repo.layDanhMuc();
+
+    // ✅ lấy danh mục và chống lặp trên UI
+    final List<DanhMuc> danhMucRaw = await widget.service.layDanhMuc();
+    final uniq = <String, DanhMuc>{};
+    for (final dm in danhMucRaw) {
+      final k =
+          '${dm.ten.trim().toLowerCase()}|${dm.loai.trim().toLowerCase()}';
+      uniq.putIfAbsent(k, () => dm);
+    }
+    final danhMuc = uniq.values.toList()
+      ..sort((a, b) => a.ten.compareTo(b.ten));
 
     if (!mounted) return;
 
@@ -243,7 +283,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                   Expanded(
                     child: Column(
                       children: [
-                        // Thẻ tổng quan (không scroll)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                           child: TheTongQuanThang(
@@ -259,7 +298,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Tiêu đề + nút chọn ngày lọc
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Row(
@@ -282,21 +320,23 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                               FilledButton.tonalIcon(
                                 onPressed: _chonNgayLoc,
                                 icon: const Icon(Icons.calendar_month),
-                                label: Text(ngayLoc == null ? "Chọn ngày" : "Đổi ngày"),
+                                label:
+                                    Text(ngayLoc == null ? "Chọn ngày" : "Đổi ngày"),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 8),
 
-                        // chỉ danh sách giao dịch được scroll
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: dsHienThi.isEmpty
                                 ? Center(
                                     child: Text(
-                                      "Không có giao dịch trong ngày đã chọn.",
+                                      ngayLoc == null
+                                          ? "Không có giao dịch trong tháng đã chọn."
+                                          : "Không có giao dịch trong ngày đã chọn.",
                                       style: Theme.of(context).textTheme.bodyMedium,
                                     ),
                                   )
@@ -316,10 +356,11 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                             title: Text(
                                               "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
                                               style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: g.viTienId == null
-                                                      ? Colors.black
-                                                      : Colors.green[800]),
+                                                fontWeight: FontWeight.bold,
+                                                color: g.viTienId == null
+                                                    ? Colors.black
+                                                    : Colors.green[800],
+                                              ),
                                             ),
                                             subtitle: Column(
                                               crossAxisAlignment:
@@ -359,7 +400,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                     ),
                   ),
 
-                  // chừa khoảng cho FAB
                   const SizedBox(height: 80),
                 ],
               ),
@@ -380,7 +420,7 @@ class DialogSuaGiaoDich extends StatefulWidget {
   final GiaoDich giaoDich;
   final List<ViTien> dsVi;
   final List<DanhMuc> dsDanhMuc;
-  final Function(int, int, int?, DateTime, String?) onSave;
+  final Function(int, String, String?, DateTime, String?) onSave;
 
   @override
   State<DialogSuaGiaoDich> createState() => _DialogSuaGiaoDichState();
@@ -390,8 +430,8 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
   late TextEditingController _soTienCtrl;
   late TextEditingController _ghiChuCtrl;
   late DateTime _ngay;
-  int? _selectedVi;
-  late int _selectedDanhMuc;
+  String? _selectedVi;
+  late String _selectedDanhMuc;
   bool _dungVi = false;
 
   @override
@@ -420,11 +460,11 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
               decoration: const InputDecoration(labelText: "Số tiền"),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
+            DropdownButtonFormField<String>(
               value: _selectedDanhMuc,
               items: widget.dsDanhMuc
-                  .map<DropdownMenuItem<int>>((e) =>
-                      DropdownMenuItem(value: e.id as int, child: Text(e.ten)))
+                  .map<DropdownMenuItem<String>>(
+                      (e) => DropdownMenuItem(value: e.id, child: Text(e.ten)))
                   .toList(),
               onChanged: (v) => setState(() => _selectedDanhMuc = v!),
               decoration: const InputDecoration(labelText: "Danh mục"),
@@ -446,7 +486,7 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
                       ? setState(() {
                           _dungVi = true;
                           if (_selectedVi == null && widget.dsVi.isNotEmpty) {
-                             _selectedVi = widget.dsVi.first.id;
+                            _selectedVi = widget.dsVi.first.id;
                           }
                         })
                       : null,
@@ -454,11 +494,11 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
               ],
             ),
             if (_dungVi)
-              DropdownButtonFormField<int>(
+              DropdownButtonFormField<String>(
                 value: _selectedVi,
                 items: widget.dsVi
-                    .map<DropdownMenuItem<int>>((e) =>
-                        DropdownMenuItem(value: e.id as int, child: Text(e.ten)))
+                    .map<DropdownMenuItem<String>>(
+                        (e) => DropdownMenuItem(value: e.id, child: Text(e.ten)))
                     .toList(),
                 onChanged: (v) => setState(() => _selectedVi = v),
                 decoration: const InputDecoration(labelText: "Ví"),
@@ -472,33 +512,37 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
             OutlinedButton.icon(
               onPressed: () async {
                 final d = await showDatePicker(
-                    context: context,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                    initialDate: _ngay);
+                  context: context,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                  initialDate: _ngay,
+                );
                 if (d != null) setState(() => _ngay = d);
               },
               icon: const Icon(Icons.calendar_today),
               label: Text(DateFormat("dd/MM/yyyy").format(_ngay)),
-            )
+            ),
           ],
         ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Hủy"),
+        ),
         FilledButton(
-            onPressed: () {
-              final amt = int.tryParse(_soTienCtrl.text) ?? 0;
-              widget.onSave(
-                amt,
-                _selectedDanhMuc,
-                _dungVi ? _selectedVi : null,
-                _ngay,
-                _ghiChuCtrl.text,
-              );
-            },
-            child: const Text("Lưu")),
+          onPressed: () {
+            final amt = int.tryParse(_soTienCtrl.text) ?? 0;
+            widget.onSave(
+              amt,
+              _selectedDanhMuc,
+              _dungVi ? _selectedVi : null,
+              _ngay,
+              _ghiChuCtrl.text,
+            );
+          },
+          child: const Text("Lưu"),
+        ),
       ],
     );
   }
