@@ -35,6 +35,8 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
   // Map cache tên ví
   final Map<String, String> dsViMap = {};
+  // Map cache danh mục
+  final Map<String, DanhMuc> dsDanhMucMap = {};
 
   @override
   void initState() {
@@ -68,6 +70,13 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
       final listVi = await widget.service.layDanhSachVi();
       for (var v in listVi) {
         dsViMap[v.id] = v.ten;
+      }
+
+      // ✅ Load categories to map colors/icons
+      final listCat = await widget.service.layDanhMuc();
+      dsDanhMucMap.clear();
+      for (var c in listCat) {
+        dsDanhMucMap[c.id] = c;
       }
 
       tongQuan = await widget.service.taiDuLieuThang(
@@ -349,17 +358,29 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                       itemCount: dsHienThi.length,
                                       itemBuilder: (context, i) {
                                         final g = dsHienThi[i];
+                                        final dm = dsDanhMucMap[g.danhMucId];
+                                        final iconCode = dm?.icon ?? 0xe3ac;
+                                        final colorVal = dm?.mau ?? 0xFF90A4AE;
+
                                         return Card(
                                           child: ListTile(
-                                            leading:
-                                                const Icon(Icons.receipt_long),
+                                            leading: Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Color(colorVal).withOpacity(0.2),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                IconData(iconCode, fontFamily: 'MaterialIcons'),
+                                                color: Color(colorVal),
+                                                size: 20,
+                                              ),
+                                            ),
                                             title: Text(
                                               "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                color: g.viTienId == null
-                                                    ? Colors.black
-                                                    : Colors.green[800],
+                                                color: Color(colorVal),
                                               ),
                                             ),
                                             subtitle: Column(

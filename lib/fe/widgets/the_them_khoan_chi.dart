@@ -20,6 +20,7 @@ class TheThemKhoanChi extends StatelessWidget {
     required this.ngayChon,
     required this.onPickDate,
     required this.onAdd,
+    this.onManageCategories,
   });
 
   final List<DanhMuc> danhMuc;
@@ -36,6 +37,7 @@ class TheThemKhoanChi extends StatelessWidget {
   final DateTime ngayChon;
   final VoidCallback onPickDate;
   final VoidCallback onAdd;
+  final VoidCallback? onManageCategories;
 
   @override
   Widget build(BuildContext context) {
@@ -57,16 +59,60 @@ class TheThemKhoanChi extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: selectedDanhMucId,
-              isExpanded: true,
-              hint: const Text("Chọn danh mục"),
-              items: danhMuc.map((d) => DropdownMenuItem<String>(value: d.id, child: Text(d.ten))).toList(),
-              onChanged: onDanhMucChanged,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.category),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedDanhMucId,
+                    isExpanded: true,
+                    hint: const Text("Chọn danh mục"),
+                    items: danhMuc.map((d) {
+                      final iconCode = d.icon ?? 0xe3ac;
+                      final colorVal = d.mau ?? 0xFF90A4AE;
+                      return DropdownMenuItem<String>(
+                        value: d.id,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Color(colorVal).withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                IconData(iconCode, fontFamily: 'MaterialIcons'),
+                                color: Color(colorVal),
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                d.ten,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: onDanhMucChanged,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    ),
+                  ),
+                ),
+                if (onManageCategories != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: onManageCategories,
+                    icon: const Icon(Icons.settings, color: Colors.grey),
+                    tooltip: "Quản lý danh mục",
+                  )
+                ]
+              ],
             ),
             const SizedBox(height: 10),
             const SizedBox(height: 10),
@@ -111,6 +157,9 @@ class TheThemKhoanChi extends StatelessWidget {
             const SizedBox(height: 10),
             TextField(
               controller: ghiChuCtrl,
+              textCapitalization: TextCapitalization.sentences, // Viết hoa chữ cái đầu
+              keyboardType: TextInputType.text,
+              autocorrect: false, // Tắt autocorrect để tránh lỗi bộ gõ tiếng Việt trên một số máy
               decoration: const InputDecoration(
                 labelText: "Ghi chú (tuỳ chọn)",
                 border: OutlineInputBorder(),

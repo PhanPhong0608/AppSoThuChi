@@ -24,6 +24,10 @@ class _TrangThongKePageState extends State<TrangThongKePage>
   DateTime _thangDangXem = DateTime.now();
   int _namDangXem = DateTime.now().year;
 
+  // Define colors
+  final Color _primaryColor = const Color(0xFFFFD54F); // Amber[300]
+  final Color _backgroundColor = const Color(0xFFF5F5F5);
+
   @override
   void initState() {
     super.initState();
@@ -33,14 +37,39 @@ class _TrangThongKePageState extends State<TrangThongKePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text("Thống kê"),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: "Theo Danh Mục"),
-            Tab(text: "Theo Thời Gian"),
-          ],
+        elevation: 0,
+        backgroundColor: _primaryColor,
+        title: const Text(
+          "Thống kê",
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              labelColor: _primaryColor,
+              unselectedLabelColor: Colors.black87,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              tabs: const [
+                Tab(child: Text("Theo Danh Mục", style: TextStyle(fontWeight: FontWeight.bold))),
+                Tab(child: Text("Theo Thời Gian", style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+            ),
+          ),
         ),
       ),
       body: TabBarView(
@@ -63,91 +92,254 @@ class _TrangThongKePageState extends State<TrangThongKePage>
           return const Center(child: CircularProgressIndicator());
 
         final data = snapshot.data!;
-        if (data.isEmpty)
-          return const Center(child: Text("Chưa có dữ liệu tháng này"));
-
+        // Tính tổng
         double tong = 0;
         for (var e in data) {
           tong += (e['tong_tien'] as int? ?? 0);
         }
 
-        final sections = data.map((e) {
-          final val = (e['tong_tien'] as int? ?? 0).toDouble();
-          final title = e['ten'] as String;
-          // Màu sắc đơn giản hoá: hash string thành color
-          final color =
-              Colors.primaries[title.hashCode % Colors.primaries.length];
-          final percent = (val / tong * 100).toStringAsFixed(1);
+        // Sử dụng màu từ danh mục (nếu có)
+        // Cần map id danh mục sang màu/tên để hiển thị đúng
+        // Tuy nhiên API hiện tại trả về list Map, có thể chứa 'ten' và 'danh_muc_id'?
+        // Kiểm tra lại service layThongKeTheoDanhMuc: nó join với categories rồi trả về 'ten', 'loai', 'tong_tien'.
+        // Để lấy màu, ta cần sửa lại backend một chút hoặc load danh mục ở client và map.
+        // Tạm thời, giả sử backend trả về 'mau' hoặc ta load danh mục để map.
 
-          return PieChartSectionData(
-            color: color,
-            value: val,
-            title: '$percent%',
-            radius: 50,
-            titleStyle: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-          );
+        // Cách nhanh nhất bây giờ: Service layThongKeTheoDanhMuc hiện tại chỉ trả về tên.
+        // Ta cần sửa Service/Repo trả thêm 'mau' và 'icon'.
+        
+        // NHƯNG, để tránh sửa backend quá nhiều, ta có thể load tất cả danh mục về cache map.
+        // Hoặc palette dự phòng.
+        final List<Color> fallbackPalette = [
+          Colors.orange, Colors.blue, Colors.green, Colors.pink, Colors.purple, Colors.teal, Colors.redAccent, Colors.amber,
+        ];
+
+        final sections = data.asMap().entries.map((entry) {
+            final index = entry.key;
+            final e = entry.value;
+            final val = (e['tong_tien'] as int? ?? 0).toDouble();
+            
+            // Try parse color from map if backend provides it, else fallback
+            Color color;
+            if (e['mau'] != null && e['mau'] is int) {
+                 color = Color(e['mau'] as int);
+            } else {
+                 color = fallbackPalette[index % fallbackPalette.length];
+            }
+
+            return PieChartSectionData(
+              color: color,
+              value: val,
+              showTitle: false, 
+              radius: 25, 
+            );
         }).toList();
 
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: () => setState(() =>
-                        _thangDangXem = DateTime(_thangDangXem.year, _thangDangXem.month - 1)),
-                  ),
-                  Text(
-                    "Tháng ${_thangDangXem.month}/${_thangDangXem.year}",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: () => setState(() =>
-                        _thangDangXem = DateTime(_thangDangXem.year, _thangDangXem.month + 1)),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: PieChart(
-                PieChartData(
-                  sections: sections,
-                  centerSpaceRadius: 40,
-                  sectionsSpace: 2,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // Thanh chọn tháng
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 2,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: () => setState(() => _thangDangXem =
+                            DateTime(_thangDangXem.year, _thangDangXem.month - 1))),
+                    Column(
+                      children: [
+                        Text(
+                          "Tháng ${_thangDangXem.month}/${_thangDangXem.year}",
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Tổng chi: ${NumberFormat.currency(locale: "vi_VN", symbol: "đ").format(tong)}",
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: () => setState(() => _thangDangXem =
+                            DateTime(_thangDangXem.year, _thangDangXem.month + 1))),
+                  ],
                 ),
               ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: data.length,
-                itemBuilder: (context, index) {
-                  final e = data[index];
-                  final val = e['tong_tien'] as int? ?? 0;
-                  final title = e['ten'] as String;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors
-                          .primaries[title.hashCode % Colors.primaries.length],
-                      radius: 8,
+              const SizedBox(height: 16),
+
+              // Biểu đồ Donut với Card
+              if (data.isEmpty)
+                const SizedBox(
+                    height: 200, child: Center(child: Text("Chưa có dữ liệu tháng này")))
+              else
+                Card(
+                  elevation: 4,
+                  shadowColor: Colors.black12,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: SizedBox(
+                      height: 250,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
+                            PieChartData(
+                              sections: sections,
+                              centerSpaceRadius: 70,
+                              sectionsSpace: 4,
+                              startDegreeOffset: -90,
+                            ),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text("Tổng chi tiêu",
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 14)),
+                              const SizedBox(height: 4),
+                              Text(
+                                NumberFormat.compact(locale: "vi_VN").format(tong), // Rút gọn số cho đẹp
+                                style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87),
+                              ),
+                            ],
+                          )
+                        ],
+                      ),
                     ),
-                    title: Text(title),
-                    trailing: Text(NumberFormat.currency(locale: "vi_VN", symbol: "đ")
-                        .format(val)),
+                  ),
+                ),
+
+              const SizedBox(height: 24),
+              
+              // Danh sách chi tiết
+              if (data.isNotEmpty) ...[
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Chi tiết",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...data.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final e = entry.value;
+                  final val = (e['tong_tien'] as int? ?? 0).toDouble();
+                  final title = e['ten'] as String;
+                  
+                  Color color;
+                  if (e['mau'] != null && e['mau'] is int) {
+                       color = Color(e['mau'] as int);
+                  } else {
+                       color = fallbackPalette[index % fallbackPalette.length];
+                  }
+
+                  IconData iconData = Icons.category;
+                  if (e['icon'] != null && e['icon'] is int) {
+                      iconData = IconData(e['icon'] as int, fontFamily: 'MaterialIcons');
+                  }
+
+                  final percent = tong > 0 ? (val / tong) : 0.0;
+ 
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+           
+                    ),
+                    child: Row(
+                      children: [
+                        // Icon Circle
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(iconData, color: color, size: 20),
+                        ),
+                        const SizedBox(width: 16),
+                        // Thông tin
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(title,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16)),
+                                  Text(
+                                    NumberFormat.currency(
+                                            locale: "vi_VN", symbol: "đ")
+                                        .format(val),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Progress Bar
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: percent,
+                                  backgroundColor: Colors.grey[200],
+                                  color: color,
+                                  minHeight: 6,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "${(percent * 100).toStringAsFixed(1)}%",
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   );
-                },
-              ),
-            ),
-          ],
+                }).toList(),
+              ]
+            ],
+          ),
         );
       },
     );
   }
 
+  // --- Biểu đồ cột (Theo năm) ---
   // --- Biểu đồ cột (Theo năm) ---
   Widget _buildBieuDoCot() {
     return FutureBuilder<List<Map<String, Object?>>>(
@@ -177,67 +369,138 @@ class _TrangThongKePageState extends State<TrangThongKePage>
             barRods: [
               BarChartRodData(
                 toY: val,
-                color: Colors.blue,
-                width: 16,
-                borderRadius: BorderRadius.circular(4),
+                gradient: const LinearGradient(
+                  colors: [Colors.orange, Colors.yellow],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+                width: 12, // Mỏng hơn chút cho thanh thoát
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                backDrawRodData: BackgroundBarChartRodData(
+                    show: true, toY: maxVal * 1.1, color: Colors.grey[100]), // Nền mờ phía sau
               )
             ],
           );
         });
 
-        return Column(
-          children: [
-             Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: () => setState(() => _namDangXem--),
-                  ),
-                  Text(
-                    "Năm $_namDangXem",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: () => setState(() => _namDangXem++),
-                  ),
-                ],
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+               // Thanh chọn năm
+              Container(
+                 decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 2,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: () => setState(() => _namDangXem--),
+                    ),
+                    Text(
+                      "Năm $_namDangXem",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: () => setState(() => _namDangXem++),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: BarChart(
-                  BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
-                    maxY: maxVal * 1.2, // Chừa khoảng trống bên trên
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false), // Ẩn số tiền bên trái cho đỡ rối
-                      ),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (val, meta) => Text(val.toInt().toString()),
+              const SizedBox(height: 16),
+
+              Card(
+                elevation: 4,
+                shadowColor: Colors.black12,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                 child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      const Text("Biểu đồ chi tiêu theo tháng",
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        height: 300,
+                        child: BarChart(
+                          BarChartData(
+                            alignment: BarChartAlignment.spaceAround,
+                            maxY: maxVal * 1.25, 
+                            barTouchData: BarTouchData(
+                              enabled: true, 
+                              touchTooltipData: BarTouchTooltipData(
+                                getTooltipColor: (group) => Colors.grey[800]!,
+                                tooltipPadding: const EdgeInsets.all(8),
+                                tooltipMargin: 8,
+                                getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                  return BarTooltipItem(
+                                    NumberFormat.compact(locale: "vi_VN").format(rod.toY),
+                                    const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            titlesData: FlTitlesData(
+                              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  getTitlesWidget: (val, meta) => Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Text(
+                                      "T${val.toInt()}",
+                                      style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            barGroups: groups,
+                            borderData: FlBorderData(show: false),
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                              horizontalInterval: maxVal > 0 ? maxVal / 5 : 1000000,
+                              getDrawingHorizontalLine: (value) => FlLine(
+                                color: Colors.grey[200],
+                                strokeWidth: 1,
+                                dashArray: [5, 5],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    barGroups: groups,
-                    borderData: FlBorderData(show: false),
-                    gridData: const FlGridData(show: false),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
               ),
-            ),
-             const SizedBox(height: 16),
-             const Text("Tổng chi tiêu theo từng tháng (Đơn vị: VNĐ)"),
-             const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         );
       },
     );

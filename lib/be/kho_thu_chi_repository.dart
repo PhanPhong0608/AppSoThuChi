@@ -40,6 +40,8 @@ class KhoThuChiRepository {
           id: key.toString(),
           ten: (value['ten'] ?? '').toString(),
           loai: (value['loai'] ?? 'expense').toString(),
+          icon: value['icon'] as int?,
+          mau: value['mau'] as int?,
         ));
       }
     });
@@ -55,27 +57,10 @@ class KhoThuChiRepository {
   }
 
 
-  /// Create default categories for a user (used when none exist)
-  Future<void> seedDefaultCategories(String uid) async {
-    final ref = _userRef(uid).child('categories');
+  // use new implementation below
+  Future<void> seedDefaultCategoriesDummy(String uid) async {}
 
-    final now = DateTime.now().millisecondsSinceEpoch;
 
-    // ID cố định (em có thể đổi tên key nếu muốn)
-    final defaults = <String, Map<String, dynamic>>{
-      'dm_an_uong': {'ten': 'Ăn uống', 'loai': 'expense', 'tao_luc': now},
-      'dm_mua_sam': {'ten': 'Mua sắm', 'loai': 'expense', 'tao_luc': now},
-      'dm_di_chuyen': {'ten': 'Di chuyển', 'loai': 'expense', 'tao_luc': now},
-      'dm_hoa_don': {'ten': 'Hóa đơn', 'loai': 'expense', 'tao_luc': now},
-      'dm_giao_duc': {'ten': 'Giáo dục', 'loai': 'expense', 'tao_luc': now},
-      'dm_giai_tri': {'ten': 'Giải trí', 'loai': 'expense', 'tao_luc': now},
-      'dm_suc_khoe': {'ten': 'Sức khỏe', 'loai': 'expense', 'tao_luc': now},
-      'dm_khac': {'ten': 'Khác', 'loai': 'expense', 'tao_luc': now},
-    };
-
-    // update() sẽ tạo/ghi đè theo key -> gọi nhiều lần cũng không trùng
-    await ref.update(defaults);
-  }
 
 
   /// Tạo sẵn 2 ví mặc định nếu user chưa có ví nào.
@@ -368,7 +353,8 @@ class KhoThuChiRepository {
       final c = catMap[e.key];
       return {
         "ten": c?.ten ?? "Khác",
-        "mau": 0xFF000000,
+        "mau": c?.mau ?? 0xFF90A4AE,
+        "icon": c?.icon ?? 0xe3ac,
         "tong_tien": e.value,
       };
     }).toList();
@@ -409,5 +395,87 @@ class KhoThuChiRepository {
       }
     }
     return sum;
+  }
+  Future<String> themDanhMuc({
+    required String userId,
+    required String ten,
+    required String loai, // 'income' or 'expense'
+    int? icon,
+    int? mau,
+  }) async {
+    final ref = _userRef(userId).child('categories').push();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await ref.set({
+      'ten': ten,
+      'loai': loai,
+      'icon': icon,
+      'mau': mau,
+      'tao_luc': now,
+    });
+    return ref.key!;
+  }
+
+  Future<void> suaDanhMuc({
+    required String userId,
+    required String id,
+    required String ten,
+    required String loai,
+    int? icon,
+    int? mau,
+  }) async {
+    await _userRef(userId).child('categories').child(id).update({
+      'ten': ten,
+      'loai': loai,
+      'icon': icon,
+      'mau': mau,
+    });
+  }
+
+  /// Create default categories for a user (used when none exist)
+  Future<void> seedDefaultCategories(String uid) async {
+    final ref = _userRef(uid).child('categories');
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // Default palette and icons matching the screenshot style roughly
+    // Sắc đẹp (Beauty) - Pink
+    // Đồ ăn (Food) - Teal/Green
+    // Giải trí (Entertainment) - Lime/Green
+    // Điện thoại (Phone) - Pink/Red
+    // Khác (Other) - Grey
+    
+    // We use standard Material Icons codePoints for simplicity
+    // User can customize later.
+    
+    final defaults = [
+      {'ten': 'Ăn uống', 'loai': 'expense', 'icon': 0xe532, 'mau': 0xFF4DB6AC}, // fastfood - Teal300
+      {'ten': 'Mua sắm', 'loai': 'expense', 'icon': 0xe59c, 'mau': 0xFFE57373}, // shopping_cart - Red300
+      {'ten': 'Di chuyển', 'loai': 'expense', 'icon': 0xe6e3, 'mau': 0xFFA1887F}, // directions_bus - Brown300
+      {'ten': 'Giải trí', 'loai': 'expense', 'icon': 0xe3e3, 'mau': 0xFFAED581}, // sports_esports - LightGreen300
+      {'ten': 'Sức khỏe', 'loai': 'expense', 'icon': 0xf1bb, 'mau': 0xFFF06292}, // medical_services - Pink300
+      {'ten': 'Điện thoại', 'loai': 'expense', 'icon': 0xe4b6, 'mau': 0xFFBA68C8}, // phone_iphone - Purple300
+      {'ten': 'Giáo dục', 'loai': 'expense', 'icon': 0xe55d, 'mau': 0xFFFFB74D}, // school - Orange300
+      {'ten': 'Lương', 'loai': 'income', 'icon': 0xe04c, 'mau': 0xFF81C784}, // attach_money - Green300
+      {'ten': 'Thưởng', 'loai': 'income', 'icon': 0xe2e2, 'mau': 0xFF4DD0E1}, // card_giftcard - Cyan300
+      {'ten': 'Tiền lãi', 'loai': 'income', 'icon': 0xe6e1, 'mau': 0xFFFFF176}, // trending_up - Yellow300
+      {'ten': 'Khác', 'loai': 'expense', 'icon': 0xe3ac, 'mau': 0xFF90A4AE}, // category - BlueGrey300
+    ];
+
+    final updates = <String, Map<String, dynamic>>{};
+    for (var d in defaults) {
+      final key = "dm_${d['ten'].toString().toLowerCase().replaceAll(' ', '_')}"; // Simple key gen
+      updates[key] = {
+        ...d,
+        'tao_luc': now,
+      };
+    }
+
+    await ref.update(updates);
+  }
+
+  Future<void> xoaDanhMuc({
+    required String userId,
+    required String id,
+  }) async {
+    await _userRef(userId).child('categories').child(id).remove();
   }
 }

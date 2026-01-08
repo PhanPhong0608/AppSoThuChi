@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../be/phien_dang_nhap.dart';
 import '../be/kho_tai_khoan_repository.dart';
+import '../be/xu_ly_thu_chi_service.dart';
+import 'dang_nhap_page.dart';
+import 'trang_quan_ly_danh_muc.dart';
 
 class TaiKhoanPage extends StatefulWidget {
   const TaiKhoanPage({
@@ -8,12 +11,14 @@ class TaiKhoanPage extends StatefulWidget {
     required this.taiKhoanId,
     required this.phien,
     required this.khoTaiKhoanRepo,
+    required this.service,
     required this.onLogout,
   });
 
   final String taiKhoanId;
   final PhienDangNhap phien;
   final KhoTaiKhoanRepository khoTaiKhoanRepo;
+  final XuLyThuChiService service;
   final VoidCallback onLogout;
 
   @override
@@ -56,13 +61,31 @@ class _TaiKhoanPageState extends State<TaiKhoanPage> {
                 ),
                 const SizedBox(height: 12),
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.logout),
-                    title: const Text("Đăng xuất"),
-                    onTap: () async {
-                      await widget.phien.dangXuat();
-                      widget.onLogout();
-                    },
+                  child: Column( // Wrap multiple ListTiles in a Column
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.category, color: Colors.orange),
+                        title: const Text("Quản lý danh mục"),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TrangQuanLyDanhMuc(service: widget.service),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.logout, color: Colors.red),
+                        title: const Text("Đăng xuất"),
+                        onTap: () async {
+                          await widget.phien.dangXuat();
+                          widget.onLogout();
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],

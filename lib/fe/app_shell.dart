@@ -75,6 +75,7 @@ class _AppShellState extends State<AppShell> {
         taiKhoanId: widget.taiKhoanId,
         phien: widget.phien,
         khoTaiKhoanRepo: widget.khoTaiKhoanRepo,
+        service: widget.thuChiService,
         onLogout: widget.onLogout,
       ),
     ];

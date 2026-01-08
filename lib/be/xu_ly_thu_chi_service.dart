@@ -62,7 +62,7 @@ class XuLyThuChiService {
       userId: taiKhoanId,
       startMs: startMs,
       endMs: endMs,
-      chiTuNganSach: true, 
+      chiTuNganSach: false, // Tính tất cả chi tiêu, không phân biệt nguồn
     );
 
     final raw = await repo.layGiaoDichTrongKhoang(
@@ -209,5 +209,30 @@ class XuLyThuChiService {
     required int nam,
   }) {
     return repo.thongKeTheoThoiGian(userId: taiKhoanId, nam: nam);
+  }
+  Future<void> themDanhMuc({
+    required String ten,
+    required String loai,
+    int? icon,
+    int? mau,
+  }) async {
+    final uid = await _getUserId();
+    await repo.themDanhMuc(userId: uid, ten: ten, loai: loai, icon: icon, mau: mau);
+  }
+
+  Future<void> suaDanhMuc({
+    required String id,
+    required String ten,
+    required String loai,
+    int? icon,
+    int? mau,
+  }) async {
+    final uid = await _getUserId();
+    await repo.suaDanhMuc(userId: uid, id: id, ten: ten, loai: loai, icon: icon, mau: mau);
+  }
+
+  Future<void> xoaDanhMuc(String id) async {
+    final uid = await _getUserId();
+    await repo.xoaDanhMuc(userId: uid, id: id);
   }
 }

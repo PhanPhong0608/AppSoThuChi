@@ -4,6 +4,7 @@ import '../be/xu_ly_thu_chi_service.dart';
 import '../db/models/danh_muc.dart';
 import '../db/models/vi_tien.dart';
 import 'widgets/the_them_khoan_chi.dart';
+import 'trang_quan_ly_danh_muc.dart';
 
 class ThemKhoanChiPage extends StatefulWidget {
   const ThemKhoanChiPage({
@@ -127,6 +128,15 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
                   ngayChon: ngayChon,
                   onPickDate: _chonNgay,
                   onAdd: _them,
+                  onManageCategories: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TrangQuanLyDanhMuc(service: widget.service),
+                      ),
+                    );
+                    _loadDanhMuc(); // Reload categories after returning
+                  },
                 ),
               ],
             ),
