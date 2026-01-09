@@ -23,7 +23,9 @@ class DangNhapPage extends StatefulWidget {
 class _DangNhapPageState extends State<DangNhapPage> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
-  bool loading = false;
+
+  bool loadingEmail = false;
+  bool loadingGoogle = false;
 
   @override
   void dispose() {
@@ -32,11 +34,15 @@ class _DangNhapPageState extends State<DangNhapPage> {
     super.dispose();
   }
 
-  void _toast(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
 
-  Future<void> _dangNhap() async {
+  Future<void> _dangNhapEmail() async {
     final emailRegex = RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$');
+
     if (emailCtrl.text.trim().isEmpty ||
         !emailRegex.hasMatch(emailCtrl.text.trim())) {
       _toast("Email không hợp lệ.");
@@ -48,7 +54,7 @@ class _DangNhapPageState extends State<DangNhapPage> {
       return;
     }
 
-    setState(() => loading = true);
+    setState(() => loadingEmail = true);
     try {
       final tk = await widget.tkService.dangNhap(
         email: emailCtrl.text,
@@ -60,12 +66,30 @@ class _DangNhapPageState extends State<DangNhapPage> {
     } catch (e) {
       if (mounted) _toast(e.toString().replaceFirst("Exception: ", ""));
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => loadingEmail = false);
+    }
+  }
+
+  Future<void> _dangNhapGoogle() async {
+    setState(() => loadingGoogle = true);
+    try {
+      final tk = await widget.tkService.dangNhapGoogle(
+        phien: widget.phien,
+      );
+
+      widget.onLoggedIn(tk.id);
+    } catch (e) {
+      final msg = e.toString().replaceFirst("Exception: ", "");
+      if (mounted) _toast(msg);
+    } finally {
+      if (mounted) setState(() => loadingGoogle = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final disabledAll = loadingEmail || loadingGoogle;
+
     return Scaffold(
       appBar: AppBar(title: const Text("Đăng nhập")),
       body: ListView(
@@ -89,29 +113,49 @@ class _DangNhapPageState extends State<DangNhapPage> {
             ),
           ),
           const SizedBox(height: 12),
+
+          // ✅ Đăng nhập Email/Password
           FilledButton(
-            onPressed: loading ? null : _dangNhap,
-            child: loading
+            onPressed: disabledAll ? null : _dangNhapEmail,
+            child: loadingEmail
                 ? const SizedBox(
                     height: 18,
                     width: 18,
-                    child: CircularProgressIndicator(),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Text("Đăng nhập"),
           ),
+
+          const SizedBox(height: 10),
+
+          // ✅ Đăng nhập Google
+          OutlinedButton.icon(
+            onPressed: disabledAll ? null : _dangNhapGoogle,
+            icon: loadingGoogle
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.g_mobiledata),
+            label: Text(loadingGoogle ? "Đang đăng nhập..." : "Đăng nhập bằng Google"),
+          ),
+
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DangKyPage(
-                    tkService: widget.tkService,
-                    phien: widget.phien, // ✅ thêm phien
-                  ),
-                ),
-              );
-            },
+            onPressed: disabledAll
+                ? null
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DangKyPage(
+                          tkService: widget.tkService,
+                          phien: widget.phien,
+                        ),
+                      ),
+                    );
+                  },
             child: const Text("Chưa có tài khoản? Đăng ký"),
           )
         ],

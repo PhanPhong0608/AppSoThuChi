@@ -11,9 +11,14 @@ import 'fe/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // ✅ Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // ❌ KHÔNG CẦN initialize Google Sign In với version 6.2.1
+  // Google Sign In sẽ tự động initialize khi cần
 
   final phien = PhienDangNhap();
 
