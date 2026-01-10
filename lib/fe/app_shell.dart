@@ -40,13 +40,14 @@ class _AppShellState extends State<AppShell> {
   final GlobalKey<TrangViTienPageState> _viTienKey =
       GlobalKey<TrangViTienPageState>();
 
-  Future<void> _moTrangThemKhoanChi() async {
+  Future<void> _moTrangThemKhoanChi({required bool isIncome}) async {
     final added = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => ThemKhoanChiPage(
           taiKhoanId: widget.taiKhoanId,
           service: widget.thuChiService,
+          isIncome: isIncome,
         ),
       ),
     );
@@ -58,6 +59,49 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _showAddMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Wrap(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.remove_circle, color: Colors.red, size: 30),
+                  title: const Text('Thêm khoản chi', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Ghi chép chi tiêu'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _moTrangThemKhoanChi(isIncome: false);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_circle, color: Colors.green, size: 30),
+                  title: const Text('Thêm khoản thu', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Ghi chép thu nhập'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _moTrangThemKhoanChi(isIncome: true);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _refreshAllData() {
+    _tongQuanKey.currentState?.taiLai();
+    _viTienKey.currentState?.taiLai();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
@@ -66,10 +110,13 @@ class _AppShellState extends State<AppShell> {
         taiKhoanId: widget.taiKhoanId,
         service: widget.thuChiService,
         repo: widget.khoTaiKhoanRepo,
+        onRefresh: _refreshAllData,
       ),
       TrangViTienPage(
         key: _viTienKey,
-        service: widget.thuChiService
+        taiKhoanId: widget.taiKhoanId,
+        service: widget.thuChiService,
+        onRefresh: _refreshAllData,
       ),
       TrangThongKePage(
         taiKhoanId: widget.taiKhoanId,
@@ -89,7 +136,8 @@ class _AppShellState extends State<AppShell> {
       body: IndexedStack(index: index, children: pages),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: _moTrangThemKhoanChi,
+        onPressed: _showAddMenu,
+        shape: const CircleBorder(),
         child: const Icon(Icons.add, size: 30),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

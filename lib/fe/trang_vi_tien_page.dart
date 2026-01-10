@@ -3,20 +3,26 @@ import 'package:intl/intl.dart';
 
 import '../be/xu_ly_thu_chi_service.dart';
 import '../db/models/vi_tien.dart';
+import '../db/models/danh_muc.dart';
 
 class TrangViTienPage extends StatefulWidget {
   const TrangViTienPage({
     super.key,
+    required this.taiKhoanId,
     required this.service,
+    this.onRefresh,
   });
 
+  final String taiKhoanId;
   final XuLyThuChiService service;
+  final VoidCallback? onRefresh;
 
   @override
   State<TrangViTienPage> createState() => TrangViTienPageState();
 }
 
 class TrangViTienPageState extends State<TrangViTienPage> {
+  final moneyFmt = NumberFormat.decimalPattern("vi_VN");
   List<ViTien>? _danhSachVi;
   bool _dangTai = true;
 
@@ -30,20 +36,19 @@ class TrangViTienPageState extends State<TrangViTienPage> {
     setState(() => _dangTai = true);
     try {
       final list = await widget.service.layDanhSachVi();
-    // Populate chiTieu
-    final updatedList = <ViTien>[];
-    for (var v in list) {
-      final chi = await widget.service.layTongChiTieuTheoVi(v.id);
-      updatedList.add(ViTien(
-        id: v.id,
-        ten: v.ten,
-        loai: v.loai,
-        soDu: v.soDu,
-        icon: v.icon,
-        an: v.an,
-        chiTieu: chi,
-      ));
-    }
+      final updatedList = <ViTien>[];
+      for (var v in list) {
+        final chi = await widget.service.layTongChiTieuTheoVi(v.id);
+        updatedList.add(ViTien(
+          id: v.id,
+          ten: v.ten,
+          loai: v.loai,
+          soDu: v.soDu,
+          icon: v.icon,
+          an: v.an,
+          chiTieu: chi,
+        ));
+      }
 
       if (mounted) {
         setState(() {
@@ -58,7 +63,8 @@ class TrangViTienPageState extends State<TrangViTienPage> {
           _danhSachVi = [];
           _dangTai = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi tải ví: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi khi tải ví: $e')));
       }
     }
   }
@@ -69,10 +75,11 @@ class TrangViTienPageState extends State<TrangViTienPage> {
   Future<void> _themViMoi() async {
     await showDialog(
       context: context,
-      builder: (context) => DialogThemVi(onAdd: (ten, loai, soDu) async {
+      builder: (dialogCtx) => DialogThemVi(onAdd: (ten, loai, soDu) async {
         await widget.service.themVi(ten: ten, loai: loai, soDu: soDu);
-        if (mounted) Navigator.pop(context);
+        if (dialogCtx.mounted) Navigator.pop(dialogCtx);
         _taiDuLieu();
+        widget.onRefresh?.call();
       }),
     );
   }
@@ -107,8 +114,78 @@ class TrangViTienPageState extends State<TrangViTienPage> {
     );
 
     if (moi != null && moi != vi.soDu) {
-      await widget.service.capNhatSoDuVi(vi.id, moi);
-      _taiDuLieu();
+      // Thay vì chỉ cập nhật số dư, ta tạo giao dịch điều chỉnh
+      final diff = moi - vi.soDu;
+      // User requested: Decrease balance = Subtract Income. Increase = Add Income.
+      // So treat all adjustments as "Income" but with signed amount.
+      final isThu = true; 
+
+      try {
+        final danhMucList = await widget.service.layDanhMuc();
+        
+        // Tìm danh mục phù hợp
+        String? danhMucId;
+        
+        // 1. Tìm chính xác "Điều chỉnh số dư" có loại là adjustment/dieuchinh
+        final exactMatch = danhMucList.firstWhere(
+           (d) => d.ten.toLowerCase() == "điều chỉnh số dư" && 
+                  (d.loai == 'adjustment' || d.loai == 'dieuchinh'),
+           orElse: () => DanhMuc(id: '', ten: '', loai: '')
+        );
+        if (exactMatch.id.isNotEmpty) danhMucId = exactMatch.id;
+
+        // 2. Nếu không có, tìm theo từ khóa (ưu tiên adjustment)
+        if (danhMucId == null) {
+          final keyWords = ['điều chỉnh', 'adjust'];
+          for (var kw in keyWords) {
+             final found = danhMucList.where((d) {
+                final name = d.ten.toLowerCase();
+                final type = d.loai.toLowerCase();
+                return (type == 'adjustment' || type == 'dieuchinh') && name.contains(kw);
+             }).firstOrNull;
+             
+             if (found != null) {
+               danhMucId = found.id;
+               break;
+             }
+          }
+        }
+
+        // 3. Nếu vẫn chưa có, tạo mới danh mục "Điều chỉnh số dư"
+        if (danhMucId == null) {
+           await widget.service.themDanhMuc(
+              ten: "Điều chỉnh số dư",
+              loai: "adjustment", // Loại đặc biệt không tính vào thu chi
+              icon: 0xe57f, 
+              mau: 0xFF9E9E9E, // Colors.grey
+           ); 
+           
+           // Re-fetch to find it
+           final newList = await widget.service.layDanhMuc();
+           final created = newList.firstWhere((d) => d.loai == 'adjustment' && d.ten == "Điều chỉnh số dư");
+           danhMucId = created.id;
+        }
+
+        // Guaranteed to be not null due to creation above
+        await widget.service.themGiaoDich(
+          taiKhoanId: widget.taiKhoanId,
+          soTien: diff, // Signed amount!
+          danhMucId: danhMucId,
+          viTienId: vi.id,
+          ngay: DateTime.now(),
+          isThu: isThu,
+          ghiChu: "Điều chỉnh ví ${vi.ten}: ${moneyFmt.format(vi.soDu)} -> ${moneyFmt.format(moi)}",
+        );
+
+        _taiDuLieu();
+        widget.onRefresh?.call();
+      } catch (e) {
+        debugPrint("Error adjusting balance: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+        }
+      }
     }
   }
 
@@ -130,8 +207,9 @@ class TrangViTienPageState extends State<TrangViTienPage> {
     );
 
     if (confirm == true) {
-      await widget.service.xoaVi(vi.id);
+      await widget.service.xoaVi(vi.id); // Warning: api might need uid
       _taiDuLieu();
+      widget.onRefresh?.call();
     }
   }
 
@@ -140,16 +218,16 @@ class TrangViTienPageState extends State<TrangViTienPage> {
     // Để đơn giản, ta copy logic Dialog
     await showDialog(
       context: context,
-      builder: (context) => DialogThemVi(
+      builder: (dialogCtx) => DialogThemVi(
         isEdit: true,
         initialTen: vi.ten,
         initialLoai: vi.loai ?? "other",
-        initialSoDu: vi.soDu, // Note: Số dư edit riêng hoặc chung cũng được.
-        // Ở đây ta cho phép sửa tên/loại, còn số dư thì dùng hàm _suaSoDu
+        initialSoDu: vi.soDu,
         onAdd: (ten, loai, _) async {
           await widget.service.suaVi(vi.id, ten, loai, vi.icon);
-          if (mounted) Navigator.pop(context);
+          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
           _taiDuLieu();
+          widget.onRefresh?.call();
         },
       ),
     );
@@ -176,7 +254,6 @@ class TrangViTienPageState extends State<TrangViTienPage> {
                   padding: const EdgeInsets.all(16),
                   itemCount: _danhSachVi!.length,
                   itemBuilder: (context, index) {
-
                     final vi = _danhSachVi![index];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -231,7 +308,8 @@ class TrangViTienPageState extends State<TrangViTienPage> {
                                     ],
                                     onSelected: (val) {
                                       if (val == "edit_balance") _suaSoDu(vi);
-                                      if (val == "edit_info") _suaThongTinVi(vi);
+                                      if (val == "edit_info")
+                                        _suaThongTinVi(vi);
                                       if (val == "delete") _xoaVi(vi);
                                     },
                                   ),
@@ -333,16 +411,23 @@ class _DialogThemViState extends State<DialogThemVi> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<String>(
-              value: _loai,
-              items: _loaiVi
-                  .map((e) => DropdownMenuItem(
-                      value: e['val'], child: Text(e['label']!)))
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) setState(() => _loai = v);
-              },
+            // Use DropdownButton instead of FormField to avoid deprecation warning
+            InputDecorator(
               decoration: const InputDecoration(labelText: "Loại ví"),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _loai,
+                  isDense: true,
+                  isExpanded: true,
+                  items: _loaiVi
+                      .map((e) => DropdownMenuItem(
+                          value: e['val'], child: Text(e['label']!)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _loai = v);
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(

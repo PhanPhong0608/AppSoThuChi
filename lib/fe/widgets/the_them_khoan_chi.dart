@@ -7,12 +7,11 @@ import '../../db/models/vi_tien.dart';
 class TheThemKhoanChi extends StatelessWidget {
   const TheThemKhoanChi({
     super.key,
+    required this.isIncome,
     required this.danhMuc,
     required this.selectedDanhMucId,
     required this.onDanhMucChanged,
     required this.dsVi,
-    required this.dungVi,
-    required this.onDungViChanged,
     required this.selectedViId,
     required this.onViChanged,
     required this.soTienCtrl,
@@ -23,13 +22,12 @@ class TheThemKhoanChi extends StatelessWidget {
     this.onManageCategories,
   });
 
+  final bool isIncome;
   final List<DanhMuc> danhMuc;
   final String? selectedDanhMucId;
   final ValueChanged<String?> onDanhMucChanged;
 
   final List<ViTien> dsVi;
-  final bool dungVi;
-  final ValueChanged<bool> onDungViChanged;
   final String? selectedViId;
   final ValueChanged<String?> onViChanged;
   final TextEditingController soTienCtrl;
@@ -47,7 +45,10 @@ class TheThemKhoanChi extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Thêm khoản chi", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            Text(
+              isIncome ? "Thêm khoản thu" : "Thêm khoản chi",
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: soTienCtrl,
@@ -115,45 +116,24 @@ class TheThemKhoanChi extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text("Nguồn tiền: ", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text("Ngân sách"),
-                  selected: !dungVi,
-                  onSelected: (v) => v ? onDungViChanged(false) : null,
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text("Ví tiền"),
-                  selected: dungVi,
-                  onSelected: (v) => v ? onDungViChanged(true) : null,
-                ),
-              ],
-            ),
-            if (dungVi) ...[
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: selectedViId,
-                isExpanded: true,
-                hint: const Text("Chọn ví"),
-                items: dsVi
-                    .map((v) => DropdownMenuItem<String>(
-                          value: v.id,
-                          child: Text(
-                              "${v.ten} (${NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0).format(v.soDu)})"),
-                        ))
-                    .toList(),
-                onChanged: onViChanged,
-                decoration: const InputDecoration(
-                  labelText: "Chọn ví",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.account_balance_wallet),
-                ),
+            DropdownButtonFormField<String>(
+              value: selectedViId,
+              isExpanded: true,
+              hint: const Text("Chọn ví"),
+              items: dsVi
+                  .map((v) => DropdownMenuItem<String>(
+                        value: v.id,
+                        child: Text(
+                            "${v.ten} (${NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0).format(v.soDu)})"),
+                      ))
+                  .toList(),
+              onChanged: onViChanged,
+              decoration: InputDecoration(
+                labelText: isIncome ? "Vào ví" : "Từ ví",
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.account_balance_wallet),
               ),
-            ],
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: ghiChuCtrl,

@@ -11,10 +11,12 @@ class ThemKhoanChiPage extends StatefulWidget {
     super.key,
     required this.taiKhoanId,
     required this.service,
+    this.isIncome = false,
   });
 
   final String taiKhoanId;
   final XuLyThuChiService service;
+  final bool isIncome;
 
   @override
   State<ThemKhoanChiPage> createState() => _ThemKhoanChiPageState();
@@ -23,10 +25,10 @@ class ThemKhoanChiPage extends StatefulWidget {
 class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   List<DanhMuc> danhMuc = [];
   String? selectedDanhMucId;
-
+  
   List<ViTien> dsVi = [];
   String? selectedViId;
-  bool dungVi = true;
+  // dungVi is removed because we always use wallet now
 
   DateTime ngayChon = DateTime.now();
   final soTienCtrl = TextEditingController();
@@ -42,24 +44,23 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
 
   Future<void> _loadDanhMuc() async {
     try {
-        // Use service API that uses the current logged-in user
-        final cats = await widget.service.layDanhMuc();
-        danhMuc = cats;
-      debugPrint('ThemKhoanChiPage: loaded ${danhMuc.length} categories');
+        final allCats = await widget.service.layDanhMuc();
+        // Filter categories based on mode
+        final targetType = widget.isIncome ? "income" : "expense";
+        danhMuc = allCats.where((d) => d.loai == targetType).toList();
 
-      // If no categories exist, create defaults and reload
-      if (danhMuc.isEmpty) {
-        await widget.service.seedDefaultCategories();
-        final raw = await widget.service.layDanhMuc();
-        danhMuc = raw;
-      }
+        // If no categories exist, seed and reload
+        if (danhMuc.isEmpty) {
+          await widget.service.seedDefaultCategories();
+          final raw = await widget.service.layDanhMuc();
+          danhMuc = raw.where((d) => d.loai == targetType).toList();
+        }
 
       dsVi = await widget.service.layDanhSachVi();
-      debugPrint('ThemKhoanChiPage: loaded ${dsVi.length} wallets');
       selectedDanhMucId = danhMuc.isNotEmpty ? danhMuc.first.id : null;
       selectedViId = dsVi.isNotEmpty ? dsVi.first.id : null;
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi tải danh mục: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi khi tải dữ liệu: $e')));
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -87,18 +88,25 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   Future<void> _them() async {
     final soTien = int.tryParse(soTienCtrl.text.trim());
     final dmId = selectedDanhMucId;
+    final viId = selectedViId;
 
     if (soTien == null || soTien <= 0 || dmId == null) {
       _toast("Nhập số tiền hợp lệ và chọn danh mục.");
       return;
     }
 
-    await widget.service.themKhoanChi(
+    if (viId == null) {
+      _toast("Vui lòng chọn ví.");
+      return;
+    }
+
+    await widget.service.themGiaoDich(
       taiKhoanId: widget.taiKhoanId,
       soTien: soTien,
       danhMucId: dmId,
-      viTienId: dungVi ? selectedViId : null,
+      viTienId: viId,
       ngay: ngayChon,
+      isThu: widget.isIncome,
       ghiChu: ghiChuCtrl.text.trim().isEmpty ? null : ghiChuCtrl.text.trim(),
     );
 
@@ -108,19 +116,18 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Thêm khoản chi")),
+      appBar: AppBar(title: Text(widget.isIncome ? "Thêm khoản thu" : "Thêm khoản chi")),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 TheThemKhoanChi(
+                  isIncome: widget.isIncome,
                   danhMuc: danhMuc,
                   selectedDanhMucId: selectedDanhMucId,
                   onDanhMucChanged: (v) => setState(() => selectedDanhMucId = v),
                   dsVi: dsVi,
-                  dungVi: dungVi,
-                  onDungViChanged: (v) => setState(() => dungVi = v),
                   selectedViId: selectedViId,
                   onViChanged: (v) => setState(() => selectedViId = v),
                   soTienCtrl: soTienCtrl,
@@ -135,7 +142,7 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
                         builder: (context) => TrangQuanLyDanhMuc(service: widget.service),
                       ),
                     );
-                    _loadDanhMuc(); // Reload categories after returning
+                    _loadDanhMuc(); 
                   },
                 ),
               ],

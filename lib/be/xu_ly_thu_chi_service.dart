@@ -53,20 +53,10 @@ class XuLyThuChiService {
     final dsDanhMuc = await repo.layDanhMuc(taiKhoanId);
     final mapTenDanhMuc = {for (final d in dsDanhMuc) d.id: d.ten};
 
-    final nganSach = await repo.layNganSachThang(
-          userId: taiKhoanId,
-          nam: thangDangXem.year,
-          thang: thangDangXem.month,
-        ) ??
-        0;
+    // Calculate total wallet balance
+    final listVi = await repo.layDanhSachVi(taiKhoanId);
+    final tongSoDuVi = listVi.fold(0, (sum, v) => sum + v.soDu);
     
-    final daChi = await repo.tinhTongChiTrongKhoang(
-      userId: taiKhoanId,
-      startMs: startMs,
-      endMs: endMs,
-      chiTuNganSach: false, // Tính tất cả chi tiêu, không phân biệt nguồn
-    );
-
     final raw = await repo.layGiaoDichTrongKhoang(
       userId: taiKhoanId,
       startMs: startMs,
@@ -77,10 +67,21 @@ class XuLyThuChiService {
         .map((g) => g.copyWith(tenDanhMuc: mapTenDanhMuc[g.danhMucId] ?? "Khác"))
         .toList();
 
+    // Calculate total expense manually to exclude income
+    int daChi = 0;
+    for (var g in dsGiaoDich) {
+      final dm = mapTenDanhMuc[g.danhMucId]; // This map only has names now. We need the object.
+      // Re-fetch category object map or search in dsDanhMuc
+      final catObj = dsDanhMuc.firstWhere((d) => d.id == g.danhMucId, orElse: () => DanhMuc(id: '', ten: '', loai: 'expense'));
+      final loai = catObj.loai.toLowerCase();
+      if (loai == 'chi' || loai == 'expense') {
+        daChi += g.soTien;
+      }
+    }
+
     return TongQuanThang(
-      nganSach: nganSach,
+      tongSoDuVi: tongSoDuVi,
       daChi: daChi,
-      conLai: nganSach - daChi,
       giaoDich: dsGiaoDich,
     );
   }
@@ -98,12 +99,13 @@ class XuLyThuChiService {
     );
   }
 
-  Future<void> themKhoanChi({
+  Future<void> themGiaoDich({
     required String taiKhoanId,
     required int soTien,
     required String danhMucId,
-    required String? viTienId,
+    required String viTienId, // Now mandatory (must select wallet)
     required DateTime ngay,
+    required bool isThu, // true = income, false = expense
     String? ghiChu,
   }) async {
     await repo.themGiaoDich(
@@ -114,6 +116,19 @@ class XuLyThuChiService {
       ngay: ngay,
       ghiChu: ghiChu,
     );
+
+    // Update wallet balance
+    final viList = await repo.layDanhSachVi(taiKhoanId);
+    final vi = viList.firstWhere((v) => v.id == viTienId, orElse: () => throw Exception("Ví không tồn tại"));
+    
+    int newBalance = vi.soDu;
+    if (isThu) {
+      newBalance += soTien;
+    } else {
+      newBalance -= soTien;
+    }
+
+    await repo.capNhatSoDuVi(taiKhoanId, viTienId, newBalance);
 
     // Cập nhật chuỗi lửa
     await _capNhatStreak(taiKhoanId, ngay);
@@ -237,6 +252,38 @@ class XuLyThuChiService {
 
   Future<void> xoaGiaoDich(String id) async {
     final uid = await _getUserId();
+    
+    // 1. Get transaction details
+    final g = await repo.layChiTietGiaoDich(userId: uid, id: id);
+    if (g == null) return; // Already deleted or not found
+
+    // 2. Identify if Income/Expense to revert balance
+    // Need category type
+    final cats = await repo.layDanhMuc(uid);
+    final cat = cats.firstWhere((c) => c.id == g.danhMucId, orElse: () => DanhMuc(id: '', ten: '', loai: 'expense'));
+    
+    final type = cat.loai.toLowerCase();
+    final isThu = type == 'thu' || type == 'income';
+    
+    // 3. Revert balance
+    // If it was Income => Subtract from wallet
+    // If it was Expense => Add back to wallet
+    if (g.viTienId != null) {
+      final viList = await repo.layDanhSachVi(uid);
+      final vi = viList.where((v) => v.id == g.viTienId).firstOrNull;
+      
+      if (vi != null) {
+        int newBalance = vi.soDu;
+        if (isThu) {
+          newBalance -= g.soTien; // Revert income
+        } else {
+          newBalance += g.soTien; // Revert expense
+        }
+        await repo.capNhatSoDuVi(uid, g.viTienId!, newBalance);
+      }
+    }
+
+    // 4. Delete transaction
     return repo.xoaGiaoDich(uid, id);
   }
 

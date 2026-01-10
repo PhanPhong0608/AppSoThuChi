@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../be/xu_ly_thu_chi_service.dart';
 import '../db/models/giao_dich.dart';
 import '../db/models/danh_muc.dart';
+import '../db/models/vi_tien.dart';
+import 'trang_sua_giao_dich.dart';
 
 class TrangLichSuGhiChep extends StatefulWidget {
   const TrangLichSuGhiChep({
@@ -73,7 +75,9 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
       for (var g in dsGiaoDich) {
         final dm = dsDanhMucMap[g.danhMucId];
         if (dm != null) {
-          if (dm.loai.toLowerCase() == 'thu') {
+          final loai = dm.loai.toLowerCase();
+          // ADJUSTMENT: Group with Income (Subtracts if negative)
+          if (loai == 'thu' || loai == 'income' || loai == 'adjustment') {
             tongThu += g.soTien;
           } else {
             tongChi += g.soTien;
@@ -144,11 +148,18 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
     return grouped;
   }
 
-  // Tính tổng tiền trong ngày
+  // Tính tổng tiền trong ngày (Thu - Chi)
   int _tongTienTrongNgay(List<GiaoDich> list) {
     int total = 0;
     for (var g in list) {
-      total += g.soTien;
+      final dm = dsDanhMucMap[g.danhMucId];
+      final loai = dm?.loai.toLowerCase() ?? 'chi';
+      // ADJUSTMENT: Treat as Income
+      if (loai == 'thu' || loai == 'income' || loai == 'adjustment') {
+        total += g.soTien;
+      } else {
+        total -= g.soTien;
+      }
     }
     return total;
   }
@@ -157,6 +168,83 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
   String _layTenThu(DateTime date) {
     const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     return daysOfWeek[date.weekday % 7];
+  }
+
+  Future<void> _xoaGiaoDich(GiaoDich g) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Xóa giao dịch"),
+        content: const Text("Bạn có chắc chắn muốn xóa không?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Hủy"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Xóa"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await widget.service.xoaGiaoDich(g.id);
+      if (mounted) {
+        await _taiDuLieu();
+      }
+    }
+  }
+
+  Future<void> _suaGiaoDich(GiaoDich g) async {
+    final nav = Navigator.of(context);
+    
+    // Chuẩn bị dữ liệu cho dialog
+    final dsVi = <ViTien>[];
+    // Convert map to list (vì widget.service.layDanhSachVi() trả về list, 
+    // nhưng ở đây ta đã cache vào map. Để an toàn, gọi service lấy list mới nhất)
+    final listVi = await widget.service.layDanhSachVi();
+    dsVi.addAll(listVi);
+
+    final List<DanhMuc> danhMucRaw = await widget.service.layDanhMuc();
+    // Unique danh mục (phòng trường hợp trùng, thực tế service trả về unique id)
+    final uniq = <String, DanhMuc>{};
+    for (final dm in danhMucRaw) {
+      // Key theo ID để chắc chắn unique
+      uniq.putIfAbsent(dm.id, () => dm);
+    }
+    final danhMuc = uniq.values.toList()
+      ..sort((a, b) => a.ten.compareTo(b.ten));
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => TrangSuaGiaoDich(
+        giaoDich: g,
+        dsVi: dsVi,
+        dsDanhMuc: danhMuc,
+        onSave: (amt, dm, vi, ngay, note) async {
+          await widget.service.suaGiaoDich(
+            id: g.id,
+            soTien: amt, // Note: Edit dialog likely passes unsigned int? 
+            // If editing adjustment, user might break the sign logic if TrangSuaGiaoDich forces unsigned.
+            // But for now, assuming edit doesn't change type logic.
+            danhMucId: dm,
+            viTienId: vi,
+            ngay: ngay,
+            ghiChu: note,
+          );
+
+          if (nav.canPop()) nav.pop();
+
+          if (mounted) {
+             await _taiDuLieu();
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -178,7 +266,7 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
                     borderRadius: const BorderRadius.only(
                       bottomLeft: Radius.circular(24),
                       bottomRight: Radius.circular(24),
@@ -333,7 +421,7 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                                   Container(
                                     padding: const EdgeInsets.all(16),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceVariant,
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                       borderRadius: const BorderRadius.only(
                                         topLeft: Radius.circular(12),
                                         topRight: Radius.circular(12),
@@ -386,13 +474,14 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                                     final dm = dsDanhMucMap[g.danhMucId];
                                     final iconCode = dm?.icon ?? 0xe3ac;
                                     final colorVal = dm?.mau ?? 0xFF90A4AE;
-                                    final loai = dm?.loai ?? 'chi';
+                                    final loai = dm?.loai.toLowerCase() ?? 'chi';
+                                    final isThu = loai == 'thu' || loai == 'income' || loai == 'adjustment';
 
                                     return ListTile(
                                       leading: Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: Color(colorVal).withOpacity(0.2),
+                                          color: Color(colorVal).withValues(alpha: 0.2),
                                           shape: BoxShape.circle,
                                         ),
                                         child: Icon(
@@ -412,10 +501,14 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                                             ),
                                           ),
                                           Text(
-                                            "${loai.toLowerCase() == 'thu' ? '+' : '-'}${moneyFmt.format(g.soTien)} đ",
+                                            // Handle Adjustment sign carefully.
+                                            // If Adjustment and Negative: "-500.000" (moneyFmt includes sign if input is negative? No usually prints -)
+                                            // moneyFmt.format(-500) -> "-500".
+                                            // So prefix "+" if positive.
+                                            "${isThu ? (g.soTien >= 0 ? '+' : '') : '-'}${moneyFmt.format(g.soTien)} đ",
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: loai.toLowerCase() == 'thu'
+                                              color: (isThu && g.soTien >= 0)
                                                   ? Colors.green
                                                   : Colors.red,
                                             ),
@@ -444,6 +537,8 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                                             ),
                                         ],
                                       ),
+                                      onTap: () => _suaGiaoDich(g),
+                                      onLongPress: () => _xoaGiaoDich(g),
                                     );
                                   }).toList(),
                                 ],

@@ -112,7 +112,7 @@ class _TrangChiTietChuoiLuaState extends State<TrangChiTietChuoiLua> {
                             ListTile(
                               title: const Text("Hoạt động gần nhất"),
                               subtitle: Text(lastActive != null
-                                  ? DateFormat("dd/MM/yyyy HH:mm")
+                                  ? DateFormat("dd/MM/yyyy")
                                       .format(lastActive!)
                                   : "Chưa có"),
                               leading: const Icon(Icons.history),

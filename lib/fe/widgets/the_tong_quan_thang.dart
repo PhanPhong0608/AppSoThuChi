@@ -5,29 +5,22 @@ class TheTongQuanThang extends StatelessWidget {
   const TheTongQuanThang({
     super.key,
     required this.monthLabel,
-    required this.nganSach,
+    required this.tongSoDuVi,
     required this.daChi,
-    required this.conLai,
     required this.moneyFmt,
     required this.onPrev,
     required this.onNext,
-    required this.onSetBudget,
   });
 
   final String monthLabel;
-  final int nganSach;
+  final int tongSoDuVi;
   final int daChi;
-  final int conLai;
   final NumberFormat moneyFmt;
   final VoidCallback onPrev;
   final VoidCallback onNext;
-  final VoidCallback onSetBudget;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final conLaiColor = conLai >= 0 ? scheme.primary : Colors.red;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -53,8 +46,8 @@ class TheTongQuanThang extends StatelessWidget {
               children: [
                 Expanded(
                   child: _StatBox(
-                    label: "Ngân sách",
-                    value: "${moneyFmt.format(nganSach)} đ",
+                    label: "Số dư",
+                    value: "${moneyFmt.format(tongSoDuVi)} đ",
                     icon: Icons.account_balance_wallet,
                   ),
                 ),
@@ -67,32 +60,6 @@ class TheTongQuanThang extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: conLaiColor.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: conLaiColor.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.savings, color: conLaiColor),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "Còn lại: ${moneyFmt.format(conLai)} đ",
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800, color: conLaiColor),
-                    ),
-                  ),
-                  FilledButton.tonal(onPressed: onSetBudget, child: const Text("Đặt ngân sách")),
-                ],
-              ),
             ),
           ],
         ),

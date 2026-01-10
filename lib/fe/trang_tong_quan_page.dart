@@ -10,6 +10,7 @@ import '../db/models/vi_tien.dart';
 import 'widgets/the_tong_quan_thang.dart';
 import 'trang_chi_tiet_chuoi_lua.dart';
 import 'trang_lich_su_ghi_chep.dart';
+import 'trang_sua_giao_dich.dart';
 
 class TrangTongQuanPage extends StatefulWidget {
   const TrangTongQuanPage({
@@ -17,11 +18,13 @@ class TrangTongQuanPage extends StatefulWidget {
     required this.taiKhoanId,
     required this.service,
     required this.repo,
+    this.onRefresh,
   });
 
   final String taiKhoanId;
   final XuLyThuChiService service;
   final KhoTaiKhoanRepository repo;
+  final VoidCallback? onRefresh;
 
   @override
   State<TrangTongQuanPage> createState() => TrangTongQuanPageState();
@@ -134,46 +137,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     taiLai();
   }
 
-  Future<void> _datNganSachDialog() async {
-    final hienTai = tongQuan?.nganSach ?? 0;
-    final ctrl = TextEditingController(text: hienTai.toString());
 
-    final result = await showDialog<int>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Đặt ngân sách tháng"),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            hintText: "Ví dụ: 5000000",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Hủy"),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, int.tryParse(ctrl.text.trim())),
-            child: const Text("Lưu"),
-          ),
-        ],
-      ),
-    );
-
-    if (result == null || result < 0) return;
-
-    await widget.service.datNganSachThang(
-      taiKhoanId: widget.taiKhoanId,
-      thangDangXem: thangDangXem,
-      soTienNganSach: result,
-    );
-
-    await taiLai();
-  }
 
   Future<void> _chonNgayLoc() async {
     final now = DateTime.now();
@@ -231,7 +195,10 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     if (confirm == true) {
       await widget.service.xoaGiaoDich(g.id);
-      if (mounted) taiLai();
+      if (mounted) {
+        await taiLai();
+        widget.onRefresh?.call();
+      }
     }
   }
 
@@ -254,7 +221,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     await showDialog(
       context: context,
-      builder: (dialogCtx) => DialogSuaGiaoDich(
+      builder: (dialogCtx) => TrangSuaGiaoDich(
         giaoDich: g,
         dsVi: dsVi,
         dsDanhMuc: danhMuc,
@@ -272,13 +239,14 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
           if (!mounted) return;
           await taiLai();
+          widget.onRefresh?.call();
         },
       ),
     );
   }
 
-  void _xemTatCaGiaoDich() {
-    Navigator.push(
+  void _xemTatCaGiaoDich() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => TrangLichSuGhiChep(
@@ -287,6 +255,10 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
         ),
       ),
     );
+    if (mounted) {
+      await taiLai();
+      widget.onRefresh?.call();
+    }
   }
 
   @override
@@ -390,13 +362,11 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                       child: TheTongQuanThang(
                         monthLabel: labelThang,
-                        nganSach: t?.nganSach ?? 0,
+                        tongSoDuVi: t?.tongSoDuVi ?? 0,
                         daChi: t?.daChi ?? 0,
-                        conLai: t?.conLai ?? 0,
                         moneyFmt: moneyFmt,
                         onPrev: _thangTruoc,
                         onNext: _thangSau,
-                        onSetBudget: _datNganSachDialog,
                       ),
                     ),
 
@@ -444,6 +414,8 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                               final dm = dsDanhMucMap[g.danhMucId];
                               final iconCode = dm?.icon ?? 0xe3ac;
                               final colorVal = dm?.mau ?? 0xFF90A4AE;
+                              final loai = dm?.loai.toLowerCase() ?? 'chi';
+                              final isThu = loai == 'thu' || loai == 'income' || loai == 'adjustment';
 
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 8),
@@ -451,7 +423,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                   leading: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: Color(colorVal).withOpacity(0.2),
+                                      color: Color(colorVal).withValues(alpha: 0.2),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
@@ -462,10 +434,10 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                     ),
                                   ),
                                   title: Text(
-                                    "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
+                                    "${g.tenDanhMuc} • ${isThu ? (g.soTien >= 0 ? '+' : '') : '-'}${moneyFmt.format(g.soTien)} đ",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(colorVal),
+                                      color: (isThu && g.soTien >= 0) ? Colors.green : Colors.red,
                                     ),
                                   ),
                                   subtitle: Column(
@@ -479,6 +451,15 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                                           g.ghiChu!,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (g.viTienId != null)
+                                        Text(
+                                          "Nguồn: ${dsViMap[g.viTienId] ?? 'Ví'}",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontStyle: FontStyle.italic,
+                                            color: Colors.green[700],
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -500,149 +481,4 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
   }
 }
 
-class DialogSuaGiaoDich extends StatefulWidget {
-  const DialogSuaGiaoDich({
-    super.key,
-    required this.giaoDich,
-    required this.dsVi,
-    required this.dsDanhMuc,
-    required this.onSave,
-  });
 
-  final GiaoDich giaoDich;
-  final List<ViTien> dsVi;
-  final List<DanhMuc> dsDanhMuc;
-  final Future<void> Function(int, String, String?, DateTime, String?) onSave;
-
-  @override
-  State<DialogSuaGiaoDich> createState() => _DialogSuaGiaoDichState();
-}
-
-class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
-  late TextEditingController _soTienCtrl;
-  late TextEditingController _ghiChuCtrl;
-  late DateTime _ngay;
-  String? _selectedVi;
-  late String _selectedDanhMuc;
-  bool _dungVi = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final g = widget.giaoDich;
-    _soTienCtrl = TextEditingController(text: g.soTien.toString());
-    _ghiChuCtrl = TextEditingController(text: g.ghiChu ?? "");
-    _ngay = g.ngay;
-    _selectedVi = g.viTienId;
-    _selectedDanhMuc = g.danhMucId;
-    _dungVi = g.viTienId != null;
-  }
-
-  @override
-  void dispose() {
-    _soTienCtrl.dispose();
-    _ghiChuCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Sửa giao dịch"),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _soTienCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "Số tiền"),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _selectedDanhMuc,
-              items: widget.dsDanhMuc
-                  .map<DropdownMenuItem<String>>(
-                      (e) => DropdownMenuItem(value: e.id, child: Text(e.ten)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedDanhMuc = v!),
-              decoration: const InputDecoration(labelText: "Danh mục"),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text("Nguồn: "),
-                ChoiceChip(
-                  label: const Text("Ngân sách"),
-                  selected: !_dungVi,
-                  onSelected: (v) => v ? setState(() => _dungVi = false) : null,
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text("Ví"),
-                  selected: _dungVi,
-                  onSelected: (v) => v
-                      ? setState(() {
-                          _dungVi = true;
-                          if (_selectedVi == null && widget.dsVi.isNotEmpty) {
-                            _selectedVi = widget.dsVi.first.id;
-                          }
-                        })
-                      : null,
-                ),
-              ],
-            ),
-            if (_dungVi)
-              DropdownButtonFormField<String>(
-                value: _selectedVi,
-                items: widget.dsVi
-                    .map<DropdownMenuItem<String>>(
-                        (e) => DropdownMenuItem(value: e.id, child: Text(e.ten)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedVi = v),
-                decoration: const InputDecoration(labelText: "Ví"),
-              ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _ghiChuCtrl,
-              decoration: const InputDecoration(labelText: "Ghi chú"),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                  initialDate: _ngay,
-                );
-                if (d != null) setState(() => _ngay = d);
-              },
-              icon: const Icon(Icons.calendar_today),
-              label: Text(DateFormat("dd/MM/yyyy").format(_ngay)),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Hủy"),
-        ),
-        FilledButton(
-          onPressed: () async {
-            final amt = int.tryParse(_soTienCtrl.text) ?? 0;
-            await widget.onSave(
-              amt,
-              _selectedDanhMuc,
-              _dungVi ? _selectedVi : null,
-              _ngay,
-              _ghiChuCtrl.text,
-            );
-          },
-          child: const Text("Lưu"),
-        ),
-      ],
-    );
-  }
-}
