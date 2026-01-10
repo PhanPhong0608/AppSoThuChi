@@ -9,6 +9,7 @@ import '../db/models/danh_muc.dart';
 import '../db/models/vi_tien.dart';
 import 'widgets/the_tong_quan_thang.dart';
 import 'trang_chi_tiet_chuoi_lua.dart';
+import 'trang_lich_su_ghi_chep.dart';
 
 class TrangTongQuanPage extends StatefulWidget {
   const TrangTongQuanPage({
@@ -34,15 +35,12 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
   TongQuanThang? tongQuan;
   String? userName;
   int streak = 0;
-  bool laNgayMoi = false; // Trạng thái streak hôm nay
+  bool laNgayMoi = false;
   bool loading = true;
 
-  // ✅ Mặc định lọc theo NGÀY HÔM NAY (chỉ phần ngày)
   DateTime? ngayLoc;
 
-  // Map cache tên ví
   final Map<String, String> dsViMap = {};
-  // Map cache danh mục
   final Map<String, DanhMuc> dsDanhMucMap = {};
 
   @override
@@ -50,11 +48,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     super.initState();
 
     final now = DateTime.now();
-
-    // ✅ set tháng đang xem = tháng hiện tại
     thangDangXem = DateTime(now.year, now.month, 1);
-
-    // ✅ mặc định lọc theo ngày hôm nay
     ngayLoc = DateTime(now.year, now.month, now.day);
 
     _taiDuLieu();
@@ -70,16 +64,14 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<void> _taiDuLieu() async {
-    setState(() => loading = true);
+    if (mounted) setState(() => loading = true);
     try {
-      // Fetch danh sách ví để map ID sang Tên
       dsViMap.clear();
       final listVi = await widget.service.layDanhSachVi();
       for (var v in listVi) {
         dsViMap[v.id] = v.ten;
       }
 
-      // ✅ Load categories to map colors/icons
       final listCat = await widget.service.layDanhMuc();
       dsDanhMucMap.clear();
       for (var c in listCat) {
@@ -90,14 +82,11 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
         taiKhoanId: widget.taiKhoanId,
         thangDangXem: thangDangXem,
       );
-      
-      // ✅ Fetch User Info
+
       final user = await widget.repo.layTheoId(widget.taiKhoanId);
       userName = user?.ten ?? user?.email;
-      userName = user?.ten ?? user?.email;
       streak = user?.chuoiLua ?? 0;
-      
-      // Check if active today
+
       final lastMs = user?.ngayHoatDongCuoiMs;
       if (lastMs != null) {
         final lastDate = DateTime.fromMillisecondsSinceEpoch(lastMs);
@@ -106,7 +95,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
       } else {
         laNgayMoi = false;
       }
-
     } catch (e, st) {
       debugPrint('TrangTongQuanPage: error _taiDuLieu: $e\n$st');
       tongQuan = null;
@@ -128,8 +116,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     setState(() {
       thangDangXem = (m == 1) ? DateTime(y - 1, 12, 1) : DateTime(y, m - 1, 1);
-
-      // ✅ đổi tháng thì bỏ lọc ngày (vì "hôm nay" không thuộc tháng đó)
       ngayLoc = null;
     });
 
@@ -189,7 +175,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     await taiLai();
   }
 
-  // ✅ CHỌN NGÀY: tự nhảy về đúng tháng của ngày đó + reload
   Future<void> _chonNgayLoc() async {
     final now = DateTime.now();
     final init = ngayLoc ?? DateTime(now.year, now.month, now.day);
@@ -213,7 +198,6 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     await taiLai();
   }
 
-  // ✅ VỀ HÔM NAY: cũng phải về đúng tháng hiện tại + reload
   void _boLocNgay() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -247,14 +231,15 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     if (confirm == true) {
       await widget.service.xoaGiaoDich(g.id);
-      taiLai();
+      if (mounted) taiLai();
     }
   }
 
   Future<void> _suaGiaoDich(GiaoDich g) async {
+    final nav = Navigator.of(context);
+
     final dsVi = await widget.service.layDanhSachVi();
 
-    // ✅ lấy danh mục và chống lặp trên UI
     final List<DanhMuc> danhMucRaw = await widget.service.layDanhMuc();
     final uniq = <String, DanhMuc>{};
     for (final dm in danhMucRaw) {
@@ -269,7 +254,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     await showDialog(
       context: context,
-      builder: (context) => DialogSuaGiaoDich(
+      builder: (dialogCtx) => DialogSuaGiaoDich(
         giaoDich: g,
         dsVi: dsVi,
         dsDanhMuc: danhMuc,
@@ -282,9 +267,24 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
             ngay: ngay,
             ghiChu: note,
           );
-          if (mounted) Navigator.pop(context);
-          taiLai();
+
+          if (nav.canPop()) nav.pop();
+
+          if (!mounted) return;
+          await taiLai();
         },
+      ),
+    );
+  }
+
+  void _xemTatCaGiaoDich() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TrangLichSuGhiChep(
+          taiKhoanId: widget.taiKhoanId,
+          service: widget.service,
+        ),
       ),
     );
   }
@@ -294,27 +294,24 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
     final labelThang = DateFormat("MM/yyyy").format(thangDangXem);
     final t = tongQuan;
 
-    // ✅ Nếu có ngayLoc => lọc theo ngày đó, nếu không => xem cả tháng
     final dsHienThi = (t?.giaoDich ?? []).where((g) {
       if (ngayLoc == null) return true;
       return _cungNgay(g.ngay, ngayLoc!);
     }).toList();
 
-    final titleGiaoDich = ngayLoc == null
-        ? "Giao dịch trong tháng ($labelThang)"
-        : "Giao dịch ngày ${DateFormat("dd/MM/yyyy").format(ngayLoc!)}";
+    final dsGanDay = [...(t?.giaoDich ?? [])]
+      ..sort((a, b) => b.ngay.compareTo(a.ngay));
+    final top3GanDay = dsGanDay.take(3).toList();
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 80, // Tăng chiều cao để chứa avatar + tên
+        toolbarHeight: 80,
         title: Row(
           children: [
-            CircleAvatar(
+            const CircleAvatar(
               radius: 20,
-              backgroundImage: AssetImage('assets/images/appthuchi.png'), 
+              backgroundImage: AssetImage('assets/images/appthuchi.png'),
               backgroundColor: Colors.transparent,
-              onBackgroundImageError: (_, __) {}, // Tránh lỗi nếu không có ảnh
-              child: null, 
             ),
             const SizedBox(width: 12),
             Column(
@@ -347,7 +344,7 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                   ),
                 ),
               );
-              _taiDuLieu(); // Reload UI when back
+              if (mounted) _taiDuLieu();
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -357,14 +354,17 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
                 color: laNgayMoi ? Colors.orange.shade50 : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: laNgayMoi
-                        ? Colors.orange.shade200
-                        : Colors.grey.shade400),
+                  color:
+                      laNgayMoi ? Colors.orange.shade200 : Colors.grey.shade400,
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.local_fire_department,
-                      color: laNgayMoi ? Colors.orange : Colors.grey, size: 20),
+                  Icon(
+                    Icons.local_fire_department,
+                    color: laNgayMoi ? Colors.orange : Colors.grey,
+                    size: 20,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     "$streak",
@@ -382,142 +382,118 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                          child: TheTongQuanThang(
-                            monthLabel: labelThang,
-                            nganSach: t?.nganSach ?? 0,
-                            daChi: t?.daChi ?? 0,
-                            conLai: t?.conLai ?? 0,
-                            moneyFmt: moneyFmt,
-                            onPrev: _thangTruoc,
-                            onNext: _thangSau,
-                            onSetBudget: _datNganSachDialog,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // ✅ Card tổng quan tháng
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: TheTongQuanThang(
+                        monthLabel: labelThang,
+                        nganSach: t?.nganSach ?? 0,
+                        daChi: t?.daChi ?? 0,
+                        conLai: t?.conLai ?? 0,
+                        moneyFmt: moneyFmt,
+                        onPrev: _thangTruoc,
+                        onNext: _thangSau,
+                        onSetBudget: _datNganSachDialog,
+                      ),
+                    ),
 
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
+                    const SizedBox(height: 16),
+
+                    // ✅ Phần "Ghi chép gần đây"
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  titleGiaoDich,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
+                              Text(
+                                "Ghi chép gần đây",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
                               ),
-                              if (ngayLoc != null)
-                                IconButton(
-                                  tooltip: "Về hôm nay",
-                                  onPressed: _boLocNgay,
-                                  icon: const Icon(Icons.close),
-                                ),
-                              FilledButton.tonalIcon(
-                                onPressed: _chonNgayLoc,
-                                icon: const Icon(Icons.calendar_month),
-                                label:
-                                    Text(ngayLoc == null ? "Chọn ngày" : "Đổi ngày"),
+                              TextButton(
+                                onPressed: _xemTatCaGiaoDich,
+                                child: const Text("Xem tất cả"),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: dsHienThi.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      ngayLoc == null
-                                          ? "Không có giao dịch trong tháng đã chọn."
-                                          : "Không có giao dịch trong ngày đã chọn.",
-                                      style: Theme.of(context).textTheme.bodyMedium,
+                          if (top3GanDay.isEmpty)
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(
+                                  "Chưa có ghi chép nào",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: Colors.grey),
+                                ),
+                              ),
+                            )
+                          else
+                            ...top3GanDay.map((g) {
+                              final dm = dsDanhMucMap[g.danhMucId];
+                              final iconCode = dm?.icon ?? 0xe3ac;
+                              final colorVal = dm?.mau ?? 0xFF90A4AE;
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Color(colorVal).withOpacity(0.2),
+                                      shape: BoxShape.circle,
                                     ),
-                                  )
-                                : Scrollbar(
-                                    controller: _dsGiaoDichCtrl,
-                                    thumbVisibility: true,
-                                    child: ListView.builder(
-                                      controller: _dsGiaoDichCtrl,
-                                      padding: const EdgeInsets.only(bottom: 12),
-                                      itemCount: dsHienThi.length,
-                                      itemBuilder: (context, i) {
-                                        final g = dsHienThi[i];
-                                        final dm = dsDanhMucMap[g.danhMucId];
-                                        final iconCode = dm?.icon ?? 0xe3ac;
-                                        final colorVal = dm?.mau ?? 0xFF90A4AE;
-
-                                        return Card(
-                                          child: ListTile(
-                                            leading: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: Color(colorVal).withOpacity(0.2),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: Icon(
-                                                IconData(iconCode, fontFamily: 'MaterialIcons'),
-                                                color: Color(colorVal),
-                                                size: 20,
-                                              ),
-                                            ),
-                                            title: Text(
-                                              "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(colorVal),
-                                              ),
-                                            ),
-                                            subtitle: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  DateFormat("dd/MM/yyyy")
-                                                      .format(g.ngay),
-                                                ),
-                                                if (g.ghiChu != null &&
-                                                    g.ghiChu!.isNotEmpty)
-                                                  Text(g.ghiChu!),
-                                                Text(
-                                                  g.viTienId == null
-                                                      ? "Nguồn: Ngân sách"
-                                                      : "Nguồn: ${dsViMap[g.viTienId] ?? 'Ví'}",
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontStyle: FontStyle.italic,
-                                                    color: g.viTienId == null
-                                                        ? Colors.grey[600]
-                                                        : Colors.green[700],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            onTap: () => _suaGiaoDich(g),
-                                            onLongPress: () => _xoaGiaoDich(g),
-                                          ),
-                                        );
-                                      },
+                                    child: Icon(
+                                      IconData(iconCode,
+                                          fontFamily: 'MaterialIcons'),
+                                      color: Color(colorVal),
+                                      size: 20,
                                     ),
                                   ),
-                          ),
-                        ),
-                      ],
+                                  title: Text(
+                                    "${g.tenDanhMuc} • ${moneyFmt.format(g.soTien)} đ",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(colorVal),
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(DateFormat("dd/MM/yyyy").format(g.ngay)),
+                                      if (g.ghiChu != null &&
+                                          g.ghiChu!.isNotEmpty)
+                                        Text(
+                                          g.ghiChu!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                  onTap: () => _suaGiaoDich(g),
+                                  onLongPress: () => _xoaGiaoDich(g),
+                                ),
+                              );
+                            }).toList(),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 80),
-                ],
+                    const SizedBox(height: 16),                    
+                  ],
+                ),
               ),
             ),
     );
@@ -536,7 +512,7 @@ class DialogSuaGiaoDich extends StatefulWidget {
   final GiaoDich giaoDich;
   final List<ViTien> dsVi;
   final List<DanhMuc> dsDanhMuc;
-  final Function(int, String, String?, DateTime, String?) onSave;
+  final Future<void> Function(int, String, String?, DateTime, String?) onSave;
 
   @override
   State<DialogSuaGiaoDich> createState() => _DialogSuaGiaoDichState();
@@ -560,6 +536,13 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
     _selectedVi = g.viTienId;
     _selectedDanhMuc = g.danhMucId;
     _dungVi = g.viTienId != null;
+  }
+
+  @override
+  void dispose() {
+    _soTienCtrl.dispose();
+    _ghiChuCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -647,9 +630,9 @@ class _DialogSuaGiaoDichState extends State<DialogSuaGiaoDich> {
           child: const Text("Hủy"),
         ),
         FilledButton(
-          onPressed: () {
+          onPressed: () async {
             final amt = int.tryParse(_soTienCtrl.text) ?? 0;
-            widget.onSave(
+            await widget.onSave(
               amt,
               _selectedDanhMuc,
               _dungVi ? _selectedVi : null,
