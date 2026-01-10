@@ -25,8 +25,7 @@ class _TrangThongKePageState extends State<TrangThongKePage>
   int _namDangXem = DateTime.now().year;
 
   // Define colors
-  final Color _primaryColor = const Color(0xFFFFD54F); // Amber[300]
-  final Color _backgroundColor = const Color(0xFFF5F5F5);
+  // Removed hardcoded colors to use Theme.of(context)
 
   @override
   void initState() {
@@ -36,32 +35,32 @@ class _TrangThongKePageState extends State<TrangThongKePage>
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      // backgroundColor: Use default theme background
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: _primaryColor,
-        title: const Text(
-          "Thống kê",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
+        // backgroundColor: Use default theme primary/surface
+        title: const Text("Thống kê"),
         centerTitle: true,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5),
+              color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
               borderRadius: BorderRadius.circular(25),
             ),
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                color: Colors.black,
+                color: colorScheme.primary,
                 borderRadius: BorderRadius.circular(25),
               ),
-              labelColor: _primaryColor,
-              unselectedLabelColor: Colors.black87,
+              labelColor: colorScheme.onPrimary,
+              unselectedLabelColor: colorScheme.onSurfaceVariant,
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               tabs: const [
@@ -110,8 +109,10 @@ class _TrangThongKePageState extends State<TrangThongKePage>
         
         // NHƯNG, để tránh sửa backend quá nhiều, ta có thể load tất cả danh mục về cache map.
         // Hoặc palette dự phòng.
+        // Updated Palette to be safer for dark mode (avoid too dark colors)
         final List<Color> fallbackPalette = [
           Colors.orange, Colors.blue, Colors.green, Colors.pink, Colors.purple, Colors.teal, Colors.redAccent, Colors.amber,
+          Colors.indigo, Colors.cyan,
         ];
 
         final sections = data.asMap().entries.map((entry) {
@@ -142,11 +143,11 @@ class _TrangThongKePageState extends State<TrangThongKePage>
               // Thanh chọn tháng
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Colors.black.withOpacity(0.05),
                       spreadRadius: 2,
                       blurRadius: 8,
                       offset: const Offset(0, 2),
@@ -165,14 +166,14 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                       children: [
                         Text(
                           "Tháng ${_thangDangXem.month}/${_thangDangXem.year}",
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           "Tổng chi: ${NumberFormat.currency(locale: "vi_VN", symbol: "đ").format(tong)}",
-                          style: TextStyle(
-                              fontSize: 14, color: Colors.grey[600]),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant
+                          ),
                         ),
                       ],
                     ),
@@ -219,10 +220,10 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                               const SizedBox(height: 4),
                               Text(
                                 NumberFormat.compact(locale: "vi_VN").format(tong), // Rút gọn số cho đẹp
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black87),
+                                    color: Theme.of(context).colorScheme.onSurface),
                               ),
                             ],
                           )
@@ -268,7 +269,7 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(16),
            
                     ),
@@ -322,7 +323,7 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                               Text(
                                 "${(percent * 100).toStringAsFixed(1)}%",
                                 style: TextStyle(
-                                    fontSize: 12, color: Colors.grey[600]),
+                                    fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -369,8 +370,11 @@ class _TrangThongKePageState extends State<TrangThongKePage>
             barRods: [
               BarChartRodData(
                 toY: val,
-                gradient: const LinearGradient(
-                  colors: [Colors.orange, Colors.yellow],
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.tertiary,
+                  ],
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                 ),
@@ -390,11 +394,11 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                // Thanh chọn năm
               Container(
                  decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Colors.black.withOpacity(0.05),
                       spreadRadius: 2,
                       blurRadius: 8,
                       offset: const Offset(0, 2),
@@ -430,9 +434,9 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      const Text("Biểu đồ chi tiêu theo tháng",
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+                      Text("Biểu đồ chi tiêu theo tháng",
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       const SizedBox(height: 24),
                       SizedBox(
                         height: 300,
@@ -470,7 +474,7 @@ class _TrangThongKePageState extends State<TrangThongKePage>
                                     child: Text(
                                       "T${val.toInt()}",
                                       style: TextStyle(
-                                          color: Colors.grey[600],
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           fontWeight: FontWeight.w500,
                                           fontSize: 12),
                                     ),

@@ -17,10 +17,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
   List<DanhMuc> _danhMuc = [];
   bool _loading = true;
 
-  // Colors based on screenshot (Golden Yellow)
-  final Color _primaryColor = const Color(0xFFFFD54F); // Amber[300] approximately
-  final Color _activeTabColor = Colors.black;
-  final Color _inactiveTabColor = Colors.black45;
+  // Colors removed to use Theme.of(context)
 
   @override
   void initState() {
@@ -124,11 +121,11 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: selectedIcon == code ? Colors.black12 : Colors.transparent,
+                          color: selectedIcon == code ? Theme.of(context).colorScheme.surfaceContainerHighest : Colors.transparent,
                           shape: BoxShape.circle,
-                          border: selectedIcon == code ? Border.all(color: Colors.black, width: 1) : null,
+                          border: selectedIcon == code ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2) : null,
                         ),
-                        child: Icon(IconData(code, fontFamily: 'MaterialIcons'), size: 24, color: Colors.black87),
+                        child: Icon(IconData(code, fontFamily: 'MaterialIcons'), size: 24, color: Theme.of(context).colorScheme.onSurface),
                       ),
                     )).toList(),
                   ),
@@ -148,7 +145,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                         decoration: BoxDecoration(
                           color: Color(cVal),
                           shape: BoxShape.circle,
-                          border: selectedColor == cVal ? Border.all(color: Colors.black, width: 2) : null,
+                          border: selectedColor == cVal ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3) : null,
                         ),
                         child: selectedColor == cVal ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
                       ),
@@ -165,7 +162,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                           groupValue: loai,
                           onChanged: (v) => setStateDialog(() => loai = v!),
                           contentPadding: EdgeInsets.zero,
-                          activeColor: _primaryColor,
+                          activeColor: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       Expanded(
@@ -175,7 +172,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                           groupValue: loai,
                           onChanged: (v) => setStateDialog(() => loai = v!),
                           contentPadding: EdgeInsets.zero,
-                          activeColor: _primaryColor,
+                          activeColor: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ],
@@ -188,10 +185,10 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Hủy", style: TextStyle(color: Colors.black)),
+            child: const Text("Hủy"),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: _primaryColor),
+            // style: Use default theme style (primary color)
             onPressed: () async {
               final ten = tenCtrl.text.trim();
               if (ten.isEmpty) return;
@@ -212,7 +209,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                 }
               }
             },
-            child: Text(isEdit ? "Lưu" : "Thêm", style: const TextStyle(color: Colors.black)),
+            child: Text(isEdit ? "Lưu" : "Thêm"),
           ),
         ],
       ),
@@ -309,7 +306,7 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
                 ],
               ),
             ),
-            const Divider(height: 1, indent: 72, endIndent: 16, color: Colors.black12),
+            const Divider(height: 1, indent: 72, endIndent: 16),
           ],
         );
       },
@@ -319,43 +316,39 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      // backgroundColor: Use default theme
       appBar: AppBar(
         title: const Text(
           "Cài đặt danh mục",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: _primaryColor, // Yellow header
+        // backgroundColor: Use default theme
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // Leading uses default theme color
         actions: const [
            Padding(
              padding: EdgeInsets.only(right: 16.0),
-             child: Icon(Icons.search, color: Colors.black), // Dummy search for visual match
+             child: Icon(Icons.search), // Uses default theme color
            )
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            color: _primaryColor,
+            color: Theme.of(context).appBarTheme.backgroundColor, 
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(25),
               ),
               child: TabBar(
                 controller: _tabController,
                 indicator: BoxDecoration(
-                  color: Colors.black, // Dark tab indicator
+                  color: Theme.of(context).colorScheme.primary,
                   borderRadius: BorderRadius.circular(25),
                 ),
-                labelColor: _primaryColor, // Text inside selected tab
-                unselectedLabelColor: Colors.black,
+                labelColor: Theme.of(context).colorScheme.onPrimary,
+                unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 dividerColor: Colors.transparent,
                 indicatorSize: TabBarIndicatorSize.tab,
                 tabs: const [
@@ -380,12 +373,11 @@ class _TrangQuanLyDanhMucState extends State<TrangQuanLyDanhMuc>
           height: 50,
           child: FilledButton.icon(
              style: FilledButton.styleFrom(
-              backgroundColor: _primaryColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
              ),
              onPressed: () => _themHoacSuaDanhMuc(),
-             icon: const Icon(Icons.add, color: Colors.black),
-             label: const Text("Thêm danh mục", style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+             icon: const Icon(Icons.add),
+             label: const Text("Thêm danh mục", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ),
       ),

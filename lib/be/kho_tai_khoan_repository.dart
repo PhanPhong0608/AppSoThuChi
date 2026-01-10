@@ -29,4 +29,26 @@ class KhoTaiKhoanRepository {
     data['id'] = uid;
     return TaiKhoan.fromMap(data);
   }
+
+  Future<void> capNhatChuoiLua({
+    required String uid,
+    required int chuoiLua,
+    required int ngayHoatDongCuoiMs,
+  }) async {
+    await _userRef(uid).update({
+      'chuoi_lua': chuoiLua,
+      'ngay_hoat_dong_cuoi': ngayHoatDongCuoiMs,
+    });
+  }
+
+  Future<void> capNhatThongTin({
+    required String uid,
+    required String ten,
+    required String sdt,
+  }) async {
+    await _userRef(uid).update({
+      'ten': ten,
+      'sdt': sdt,
+    });
+  }
 }

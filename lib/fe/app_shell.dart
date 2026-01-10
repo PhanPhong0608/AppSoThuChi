@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../be/phien_dang_nhap.dart';
 import '../be/xu_ly_thu_chi_service.dart';
 import '../be/kho_tai_khoan_repository.dart';
+import '../be/theme_service.dart';
 import 'trang_tong_quan_page.dart';
 import 'trang_vi_tien_page.dart';
 import 'trang_thong_ke_page.dart';
@@ -17,6 +18,7 @@ class AppShell extends StatefulWidget {
     required this.phien,
     required this.khoTaiKhoanRepo,
     required this.onLogout,
+    required this.themeService,
   });
 
   final String taiKhoanId;
@@ -24,6 +26,7 @@ class AppShell extends StatefulWidget {
   final PhienDangNhap phien;
   final KhoTaiKhoanRepository khoTaiKhoanRepo;
   final VoidCallback onLogout;
+  final ThemeService themeService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -62,6 +65,7 @@ class _AppShellState extends State<AppShell> {
         key: _tongQuanKey,
         taiKhoanId: widget.taiKhoanId,
         service: widget.thuChiService,
+        repo: widget.khoTaiKhoanRepo,
       ),
       TrangViTienPage(
         key: _viTienKey,
@@ -77,6 +81,7 @@ class _AppShellState extends State<AppShell> {
         khoTaiKhoanRepo: widget.khoTaiKhoanRepo,
         service: widget.thuChiService,
         onLogout: widget.onLogout,
+        themeService: widget.themeService,
       ),
     ];
 
@@ -98,7 +103,10 @@ class _AppShellState extends State<AppShell> {
             children: [
               Expanded(
                 child: IconButton(
-                  onPressed: () => setState(() => index = 0),
+                  onPressed: () {
+                    setState(() => index = 0);
+                    _tongQuanKey.currentState?.taiLai();
+                  },
                   icon: Icon(
                     Icons.home_rounded,
                     color: index == 0

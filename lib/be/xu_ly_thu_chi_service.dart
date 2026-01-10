@@ -2,14 +2,16 @@ import '../db/models/giao_dich.dart';
 import '../db/models/vi_tien.dart';
 import '../db/models/danh_muc.dart';
 import 'kho_thu_chi_repository.dart';
+import 'kho_tai_khoan_repository.dart';
 import 'tong_quan_thang.dart';
 import 'phien_dang_nhap.dart';
 
 class XuLyThuChiService {
   final KhoThuChiRepository repo;
+  final KhoTaiKhoanRepository tkRepo;
   final PhienDangNhap phien;
 
-  XuLyThuChiService(this.repo, this.phien);
+  XuLyThuChiService(this.repo, this.tkRepo, this.phien);
 
   Future<String> _getUserId() async {
     final uid = await phien.layUserId();
@@ -112,6 +114,57 @@ class XuLyThuChiService {
       ngay: ngay,
       ghiChu: ghiChu,
     );
+
+    // Cập nhật chuỗi lửa
+    await _capNhatStreak(taiKhoanId, ngay);
+  }
+
+  Future<void> checkInHangNgay() async {
+    final uid = await _getUserId();
+    await _capNhatStreak(uid, DateTime.now());
+  }
+
+  Future<void> _capNhatStreak(String uid, DateTime activityDate) async {
+    try {
+      final user = await tkRepo.layTheoId(uid);
+      if (user != null) {
+        final txDate = DateTime(activityDate.year, activityDate.month, activityDate.day);
+        
+        final lastMs = user.ngayHoatDongCuoiMs;
+        DateTime? lastDate;
+        if (lastMs != null) {
+          final d = DateTime.fromMillisecondsSinceEpoch(lastMs);
+          lastDate = DateTime(d.year, d.month, d.day);
+        }
+
+        int newStreak = user.chuoiLua;
+
+        if (lastDate == null) {
+          // Chưa có activity nào -> streak = 1
+          newStreak = 1;
+          await tkRepo.capNhatChuoiLua(uid: uid, chuoiLua: newStreak, ngayHoatDongCuoiMs: txDate.millisecondsSinceEpoch);
+        } else {
+          // Compare txDate vs lastDate
+          if (txDate.isBefore(lastDate)) {
+            // Giao dịch cũ hơn ngày cuối cùng -> không ảnh hưởng streak hiện tại
+          } else if (txDate.isAtSameMomentAs(lastDate)) {
+            // Cùng ngày -> không đổi
+          } else {
+            // Ngày mới hơn
+            final diff = txDate.difference(lastDate).inDays;
+            if (diff == 1) {
+              newStreak++;
+            } else {
+              // Cách quá xa
+              newStreak = 1;
+            }
+            await tkRepo.capNhatChuoiLua(uid: uid, chuoiLua: newStreak, ngayHoatDongCuoiMs: txDate.millisecondsSinceEpoch);
+          }
+        }
+      }
+    } catch (e) {
+      print("Streak update failed: $e");
+    }
   }
 
   // Refactored methods that didn't have ID before
@@ -210,6 +263,15 @@ class XuLyThuChiService {
   }) {
     return repo.thongKeTheoThoiGian(userId: taiKhoanId, nam: nam);
   }
+
+  Future<List<GiaoDich>> layGiaoDichTrongKhoang({
+    required String userId,
+    required int startMs,
+    required int endMs,
+  }) {
+    return repo.layGiaoDichTrongKhoang(userId: userId, startMs: startMs, endMs: endMs);
+  }
+
   Future<void> themDanhMuc({
     required String ten,
     required String loai,

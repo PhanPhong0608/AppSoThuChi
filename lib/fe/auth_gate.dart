@@ -5,6 +5,7 @@ import '../be/kho_tai_khoan_repository.dart';
 import '../be/phien_dang_nhap.dart';
 import '../be/xu_ly_tai_khoan_service.dart';
 import '../be/xu_ly_thu_chi_service.dart';
+import '../be/theme_service.dart';
 import 'app_shell.dart';
 import 'dang_nhap_page.dart';
 
@@ -16,6 +17,7 @@ class AuthGate extends StatefulWidget {
   final XuLyTaiKhoanService tkService;
   final XuLyThuChiService thuChiService;
   final KhoTaiKhoanRepository khoTaiKhoanRepo;
+  final ThemeService themeService;
 
   const AuthGate({
     super.key,
@@ -23,6 +25,7 @@ class AuthGate extends StatefulWidget {
     required this.tkService,
     required this.thuChiService,
     required this.khoTaiKhoanRepo,
+    required this.themeService,
   });
 
   @override
@@ -102,6 +105,7 @@ class _AuthGateState extends State<AuthGate> {
       phien: widget.phien,
       khoTaiKhoanRepo: widget.khoTaiKhoanRepo,
       onLogout: _onLogout,
+      themeService: widget.themeService,
     );
   }
 }

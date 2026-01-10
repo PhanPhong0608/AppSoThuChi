@@ -2,21 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../be/xu_ly_thu_chi_service.dart';
+import '../be/kho_tai_khoan_repository.dart';
 import '../be/tong_quan_thang.dart';
 import '../db/models/giao_dich.dart';
 import '../db/models/danh_muc.dart';
 import '../db/models/vi_tien.dart';
 import 'widgets/the_tong_quan_thang.dart';
+import 'trang_chi_tiet_chuoi_lua.dart';
 
 class TrangTongQuanPage extends StatefulWidget {
   const TrangTongQuanPage({
     super.key,
     required this.taiKhoanId,
     required this.service,
+    required this.repo,
   });
 
   final String taiKhoanId;
   final XuLyThuChiService service;
+  final KhoTaiKhoanRepository repo;
 
   @override
   State<TrangTongQuanPage> createState() => TrangTongQuanPageState();
@@ -28,6 +32,9 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
   DateTime thangDangXem = DateTime(DateTime.now().year, DateTime.now().month, 1);
   TongQuanThang? tongQuan;
+  String? userName;
+  int streak = 0;
+  bool laNgayMoi = false; // Trạng thái streak hôm nay
   bool loading = true;
 
   // ✅ Mặc định lọc theo NGÀY HÔM NAY (chỉ phần ngày)
@@ -83,6 +90,23 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
         taiKhoanId: widget.taiKhoanId,
         thangDangXem: thangDangXem,
       );
+      
+      // ✅ Fetch User Info
+      final user = await widget.repo.layTheoId(widget.taiKhoanId);
+      userName = user?.ten ?? user?.email;
+      userName = user?.ten ?? user?.email;
+      streak = user?.chuoiLua ?? 0;
+      
+      // Check if active today
+      final lastMs = user?.ngayHoatDongCuoiMs;
+      if (lastMs != null) {
+        final lastDate = DateTime.fromMillisecondsSinceEpoch(lastMs);
+        final now = DateTime.now();
+        laNgayMoi = _cungNgay(lastDate, now);
+      } else {
+        laNgayMoi = false;
+      }
+
     } catch (e, st) {
       debugPrint('TrangTongQuanPage: error _taiDuLieu: $e\n$st');
       tongQuan = null;
@@ -282,7 +306,78 @@ class TrangTongQuanPageState extends State<TrangTongQuanPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Sổ thu chi"),
+        toolbarHeight: 80, // Tăng chiều cao để chứa avatar + tên
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: AssetImage('assets/images/appthuchi.png'), 
+              backgroundColor: Colors.transparent,
+              onBackgroundImageError: (_, __) {}, // Tránh lỗi nếu không có ảnh
+              child: null, 
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Xin chào,",
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  userName ?? "Người dùng",
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          InkWell(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TrangChiTietChuoiLua(
+                    taiKhoanId: widget.taiKhoanId,
+                    service: widget.service,
+                    repo: widget.repo,
+                  ),
+                ),
+              );
+              _taiDuLieu(); // Reload UI when back
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: laNgayMoi ? Colors.orange.shade50 : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: laNgayMoi
+                        ? Colors.orange.shade200
+                        : Colors.grey.shade400),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.local_fire_department,
+                      color: laNgayMoi ? Colors.orange : Colors.grey, size: 20),
+                  const SizedBox(width: 4),
+                  Text(
+                    "$streak",
+                    style: TextStyle(
+                      color: laNgayMoi ? Colors.orange : Colors.grey,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
