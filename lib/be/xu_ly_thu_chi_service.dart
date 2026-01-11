@@ -212,7 +212,69 @@ class XuLyThuChiService {
     String? icon,
   }) async {
     final uid = await _getUserId();
-    return repo.themVi(userId: uid, ten: ten, loai: loai, soDu: soDu, icon: icon);
+    // 1. Create Wallet and get ID
+    final viId = await repo.themVi(userId: uid, ten: ten, loai: loai, soDu: soDu, icon: icon);
+
+    // 2. Record Transaction for Initial Balance
+    // We treat this as an "Adjustment" or "Income" to reflect the starting balance.
+    // Even if it's 0, we record it so it's visible in history if user wants to see "Creation".
+    // But usually 0 balance transaction is noise. However, user requested "hiển thị cho dù có số dư hay không" (display whether balance exists or not/even if 0?).
+    // "cho dù có số dư hay không" -> implies even if balance is implied? Or if it's 0?
+    // Let's record it anyway.
+
+    try {
+        final danhMucList = await repo.layDanhMuc(uid);
+        String? danhMucId;
+        
+        // Find "Điều chỉnh số dư"
+        final exactMatch = danhMucList.firstWhere(
+            (d) => d.ten.toLowerCase() == "điều chỉnh số dư" && 
+                  (d.loai == 'adjustment' || d.loai == 'dieuchinh'),
+            orElse: () => DanhMuc(id: '', ten: '', loai: '')
+        );
+        if (exactMatch.id.isNotEmpty) danhMucId = exactMatch.id;
+
+        if (danhMucId == null) {
+          final keyWords = ['điều chỉnh', 'adjust'];
+          for (var kw in keyWords) {
+              final found = danhMucList.where((d) {
+                final name = d.ten.toLowerCase();
+                final type = d.loai.toLowerCase();
+                return (type == 'adjustment' || type == 'dieuchinh') && name.contains(kw);
+              }).firstOrNull;
+              
+              if (found != null) {
+                danhMucId = found.id;
+                break;
+              }
+          }
+        }
+
+        if (danhMucId == null) {
+            // Create new category
+            danhMucId = await repo.themDanhMuc(
+              userId: uid,
+              ten: "Điều chỉnh số dư",
+              loai: "adjustment",
+              icon: 0xe57f, 
+              mau: 0xFF9E9E9E,
+            );
+        }
+
+        await repo.themGiaoDich(
+          userId: uid,
+          soTien: soDu,
+          danhMucId: danhMucId!,
+          viTienId: viId,
+          ngay: DateTime.now(),
+          ghiChu: "Số dư ban đầu",
+        );
+
+    } catch (e) {
+      print("Error creating initial balance transaction: $e");
+      // Don't fail the wallet creation if transaction fails, but strictly we should.
+      // For now, just log.
+    }
   }
 
   Future<void> capNhatSoDuVi(String viId, int soDuMoi) async {
@@ -239,6 +301,61 @@ class XuLyThuChiService {
     String? ghiChu,
   }) async {
     final uid = await _getUserId();
+
+    // 1. Get old transaction details
+    final oldTx = await repo.layChiTietGiaoDich(userId: uid, id: id);
+    if (oldTx == null) return;
+
+    // 2. Fetch all categories to determine types
+    final cats = await repo.layDanhMuc(uid);
+    // Helper to find category type
+    String getType(String dmId) {
+       final c = cats.firstWhere((d) => d.id == dmId, orElse: () => DanhMuc(id: '', ten: '', loai: 'expense'));
+       return c.loai.toLowerCase();
+    }
+
+    bool isThu(String type) => type == 'thu' || type == 'income' || type == 'adjustment' || type == 'dieuchinh';
+
+    // 3. Revert Old Transaction Effect
+    if (oldTx.viTienId != null) {
+        final oldType = getType(oldTx.danhMucId);
+        final oldIsThu = isThu(oldType);
+        
+        final viList = await repo.layDanhSachVi(uid);
+        final oldVi = viList.where((v) => v.id == oldTx.viTienId).firstOrNull;
+
+        if (oldVi != null) {
+            int recoveredBal = oldVi.soDu;
+            if (oldIsThu) {
+                recoveredBal -= oldTx.soTien; // Revert income: subtract it back
+            } else {
+                recoveredBal += oldTx.soTien; // Revert expense: add it back
+            }
+            await repo.capNhatSoDuVi(uid, oldTx.viTienId!, recoveredBal);
+        }
+    }
+
+    // 4. Apply New Transaction Effect
+    if (viTienId != null) {
+        final newType = getType(danhMucId);
+        final newIsThu = isThu(newType);
+
+        // Re-fetch wallets to get updated balance (in case old wallet == new wallet)
+        final viList = await repo.layDanhSachVi(uid);
+        final newVi = viList.where((v) => v.id == viTienId).firstOrNull;
+
+        if (newVi != null) {
+             int newBal = newVi.soDu;
+             if (newIsThu) {
+                 newBal += soTien;
+             } else {
+                 newBal -= soTien;
+             }
+             await repo.capNhatSoDuVi(uid, viTienId, newBal);
+        }
+    }
+
+    // 5. Update Transaction Record
     return repo.suaGiaoDich(
         userId: uid,
         id: id,

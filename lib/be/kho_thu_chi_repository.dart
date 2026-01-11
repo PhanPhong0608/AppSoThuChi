@@ -127,20 +127,22 @@ class KhoThuChiRepository {
     await _userRef(userId).child("wallets").child(id).update({"an": 1});
   }
 
-  Future<void> themVi({
+  Future<String> themVi({
     required String userId,
     required String ten,
     required String loai,
     required int soDu,
     String? icon,
   }) async {
-    await _userRef(userId).child("wallets").push().set({
+    final ref = _userRef(userId).child("wallets").push();
+    await ref.set({
       "ten": ten,
       "loai": loai,
       "so_du": soDu,
       "icon": icon,
       "an": 0,
     });
+    return ref.key!;
   }
 
   Future<void> capNhatSoDuVi(String userId, String viId, int soDuMoi) async {

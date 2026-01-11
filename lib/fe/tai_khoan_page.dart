@@ -117,7 +117,6 @@ class _TaiKhoanPageState extends State<TaiKhoanPage> {
                           width: double.infinity,
                           child: FilledButton.icon(
                             onPressed: _luu,
-                            icon: const Icon(Icons.save),
                             label: const Text("Lưu thay đổi"),
                           ),
                         ),
