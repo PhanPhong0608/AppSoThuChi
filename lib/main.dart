@@ -13,13 +13,9 @@ import 'be/theme_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // ✅ Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  // ❌ KHÔNG CẦN initialize Google Sign In với version 6.2.1
-  // Google Sign In sẽ tự động initialize khi cần
 
   final phien = PhienDangNhap();
 
@@ -28,7 +24,6 @@ Future<void> main() async {
 
   final tkService = XuLyTaiKhoanService(khoTaiKhoanRepo);
 
-  // ✅ XuLyThuChiService đang cần 2 tham số -> repo + phien
   final thuChiService = XuLyThuChiService(khoThuChiRepo, khoTaiKhoanRepo, phien);
 
   final themeService = ThemeService();

@@ -114,7 +114,6 @@ class _DangNhapPageState extends State<DangNhapPage> {
           ),
           const SizedBox(height: 12),
 
-          // ✅ Đăng nhập Email/Password
           FilledButton(
             onPressed: disabledAll ? null : _dangNhapEmail,
             child: loadingEmail
@@ -128,7 +127,6 @@ class _DangNhapPageState extends State<DangNhapPage> {
 
           const SizedBox(height: 10),
 
-          // ✅ Đăng nhập Google
           OutlinedButton.icon(
             onPressed: disabledAll ? null : _dangNhapGoogle,
             icon: loadingGoogle

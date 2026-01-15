@@ -11,7 +11,6 @@ class TrangCaiDat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to theme changes to rebuild UI immediately
     return ListenableBuilder(
       listenable: themeService,
       builder: (context, _) {

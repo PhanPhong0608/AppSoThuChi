@@ -28,7 +28,6 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
   
   List<ViTien> dsVi = [];
   String? selectedViId;
-  // dungVi is removed because we always use wallet now
 
   DateTime ngayChon = DateTime.now();
   final soTienCtrl = TextEditingController();
@@ -49,7 +48,6 @@ class _ThemKhoanChiPageState extends State<ThemKhoanChiPage> {
         final targetType = widget.isIncome ? "income" : "expense";
         danhMuc = allCats.where((d) => d.loai == targetType).toList();
 
-        // If no categories exist, seed and reload
         if (danhMuc.isEmpty) {
           await widget.service.seedDefaultCategories();
           final raw = await widget.service.layDanhMuc();

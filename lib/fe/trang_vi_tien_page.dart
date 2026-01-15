@@ -116,8 +116,7 @@ class TrangViTienPageState extends State<TrangViTienPage> {
     if (moi != null && moi != vi.soDu) {
       // Thay vì chỉ cập nhật số dư, ta tạo giao dịch điều chỉnh
       final diff = moi - vi.soDu;
-      // User requested: Decrease balance = Subtract Income. Increase = Add Income.
-      // So treat all adjustments as "Income" but with signed amount.
+
       final isThu = true; 
 
       try {
@@ -166,10 +165,9 @@ class TrangViTienPageState extends State<TrangViTienPage> {
            danhMucId = created.id;
         }
 
-        // Guaranteed to be not null due to creation above
         await widget.service.themGiaoDich(
           taiKhoanId: widget.taiKhoanId,
-          soTien: diff, // Signed amount!
+          soTien: diff, 
           danhMucId: danhMucId,
           viTienId: vi.id,
           ngay: DateTime.now(),

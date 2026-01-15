@@ -200,18 +200,15 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
   Future<void> _suaGiaoDich(GiaoDich g) async {
     final nav = Navigator.of(context);
     
-    // Chuẩn bị dữ liệu cho dialog
     final dsVi = <ViTien>[];
-    // Convert map to list (vì widget.service.layDanhSachVi() trả về list, 
-    // nhưng ở đây ta đã cache vào map. Để an toàn, gọi service lấy list mới nhất)
+
     final listVi = await widget.service.layDanhSachVi();
     dsVi.addAll(listVi);
 
     final List<DanhMuc> danhMucRaw = await widget.service.layDanhMuc();
-    // Unique danh mục (phòng trường hợp trùng, thực tế service trả về unique id)
+    
     final uniq = <String, DanhMuc>{};
     for (final dm in danhMucRaw) {
-      // Key theo ID để chắc chắn unique
       uniq.putIfAbsent(dm.id, () => dm);
     }
     final danhMuc = uniq.values.toList()
@@ -228,9 +225,7 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
         onSave: (amt, dm, vi, ngay, note) async {
           await widget.service.suaGiaoDich(
             id: g.id,
-            soTien: amt, // Note: Edit dialog likely passes unsigned int? 
-            // If editing adjustment, user might break the sign logic if TrangSuaGiaoDich forces unsigned.
-            // But for now, assuming edit doesn't change type logic.
+            soTien: amt, 
             danhMucId: dm,
             viTienId: vi,
             ngay: ngay,
@@ -262,7 +257,6 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // ✅ Header: Tổng thu, Tổng chi, Chọn tháng
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -274,7 +268,6 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                   ),
                   child: Column(
                     children: [
-                      // Chọn tháng
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -318,7 +311,6 @@ class _TrangLichSuGhiChepState extends State<TrangLichSuGhiChep> {
                       
                       const SizedBox(height: 16),
                       
-                      // Tổng thu và Tổng chi
                       Row(
                         children: [
                           Expanded(
